@@ -1,43 +1,97 @@
 const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const path = require('path');
 const fs = require('fs');
 
-const dbPath = path.join(__dirname, 'vitaldiary.db');
-const dbExists = fs.existsSync(dbPath);
+const connectionString = process.env.DATABASE_URL || process.env.DATABASE_PRIVATE_URL;
+const isPg = !!connectionString;
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Database connection failed:', err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
+let db;
+let pool;
+
+if (isPg) {
+  const ssl = connectionString.includes('localhost') || connectionString.includes('127.0.0.1')
+    ? false
+    : { rejectUnauthorized: false };
+  pool = new Pool({
+    connectionString,
+    ssl
+  });
+  console.log('Connected to the PostgreSQL database.');
+} else {
+  const dbPath = path.join(__dirname, 'vitaldiary.db');
+  db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Database connection failed:', err.message);
+    } else {
+      console.log('Connected to the SQLite database.');
+    }
+  });
+}
+
+// Convert SQLite style parameterized queries (with '?') to PG style (with '$1, $2...')
+function convertSql(sql) {
+  if (!isPg) return sql;
+  
+  let index = 1;
+  let converted = sql.replace(/\?/g, () => `$${index++}`);
+  
+  // Convert SQLite constraints to PostgreSQL equivalents
+  converted = converted.replace(/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/gi, 'SERIAL PRIMARY KEY');
+  converted = converted.replace(/\bDATETIME\b/gi, 'TIMESTAMP');
+  
+  // Append RETURNING id to INSERTs to mimic SQLite lastID behavior
+  if (/^\s*insert\s+/i.test(converted) && !/returning/i.test(converted)) {
+    converted += ' RETURNING id';
   }
-});
+  
+  return converted;
+}
 
 // Convert callbacks to Promises for cleaner async/await code
 const dbQuery = {
-  run(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      db.run(sql, params, function (err) {
-        if (err) reject(err);
-        else resolve({ lastID: this.lastID, changes: this.changes });
+  async run(sql, params = []) {
+    if (isPg) {
+      const convertedSql = convertSql(sql);
+      const res = await pool.query(convertedSql, params);
+      const lastID = res.rows[0] ? res.rows[0].id : null;
+      return { lastID, changes: res.rowCount };
+    } else {
+      return new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) {
+          if (err) reject(err);
+          else resolve({ lastID: this.lastID, changes: this.changes });
+        });
       });
-    });
+    }
   },
-  get(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      db.get(sql, params, (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
+  async get(sql, params = []) {
+    if (isPg) {
+      const convertedSql = convertSql(sql);
+      const res = await pool.query(convertedSql, params);
+      return res.rows[0];
+    } else {
+      return new Promise((resolve, reject) => {
+        db.get(sql, params, (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
       });
-    });
+    }
   },
-  all(sql, params = []) {
-    return new Promise((resolve, reject) => {
-      db.all(sql, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
+  async all(sql, params = []) {
+    if (isPg) {
+      const convertedSql = convertSql(sql);
+      const res = await pool.query(convertedSql, params);
+      return res.rows;
+    } else {
+      return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
       });
-    });
+    }
   }
 };
 
@@ -93,7 +147,7 @@ async function initDatabase() {
 }
 
 module.exports = {
-  db,
+  db: isPg ? pool : db,
   dbQuery,
   initDatabase
 };

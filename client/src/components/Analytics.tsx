@@ -216,62 +216,43 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
         ]
       };
     } else {
-      const glLogs = filteredLogs as GlucoseRecord[];
+      // Glucose: return empty, handled by separate useMemo
+      return { labels: [], datasets: [] };
+    }
+  }, [filteredLogs, metric]);
 
-      const fastingLogs = glLogs.filter(l => l.context === 'fasting');
-      const preMealLogs = glLogs.filter(l => l.context === 'pre-meal');
-      const postMealLogs = glLogs.filter(l => l.context === 'post-meal');
+  const glucoseCharts = useMemo(() => {
+    if (metric !== 'glucose') return null;
+    const glLogs = filteredLogs as GlucoseRecord[];
 
+    const buildContextChart = (context: string, label: string, color: string, bgColor: string) => {
+      const contextLogs = glLogs.filter(l => l.context === context);
       return {
-        fasting: {
-          labels: fastingLogs.map(l => formatDateLabel(l.timestamp)),
+        logs: contextLogs,
+        data: {
+          labels: contextLogs.map(l => formatDateLabel(l.timestamp)),
           datasets: [
             {
-              label: 'Fasting Glucose (mg/dL)',
-              data: fastingLogs.map(l => l.value),
-              borderColor: 'hsl(145, 70%, 43%)',
-              backgroundColor: 'hsla(145, 70%, 43%, 0.15)',
+              label,
+              data: contextLogs.map(l => l.value),
+              borderColor: color,
+              backgroundColor: bgColor,
               borderWidth: 3,
               tension: 0.3,
               fill: true,
-              pointBackgroundColor: 'hsl(145, 70%, 43%)'
-            }
-          ]
-        },
-
-        preMeal: {
-          labels: preMealLogs.map(l => formatDateLabel(l.timestamp)),
-          datasets: [
-            {
-              label: 'Pre-Meal Glucose (mg/dL)',
-              data: preMealLogs.map(l => l.value),
-              borderColor: 'hsl(38, 92%, 52%)',
-              backgroundColor: 'hsla(38, 92%, 52%, 0.15)',
-              borderWidth: 3,
-              tension: 0.3,
-              fill: true,
-              pointBackgroundColor: 'hsl(38, 92%, 52%)'
-            }
-          ]
-        },
-
-        postMeal: {
-          labels: postMealLogs.map(l => formatDateLabel(l.timestamp)),
-          datasets: [
-            {
-              label: 'Post-Meal Glucose (mg/dL)',
-              data: postMealLogs.map(l => l.value),
-              borderColor: 'hsl(275, 80%, 60%)',
-              backgroundColor: 'hsla(275, 80%, 60%, 0.15)',
-              borderWidth: 3,
-              tension: 0.3,
-              fill: true,
-              pointBackgroundColor: 'hsl(275, 80%, 60%)'
+              pointBackgroundColor: color,
+              pointHoverRadius: 7
             }
           ]
         }
       };
-    }
+    };
+
+    return {
+      fasting: buildContextChart('fasting', 'Fasting Glucose (mg/dL)', 'hsl(145, 70%, 43%)', 'hsla(145, 70%, 43%, 0.12)'),
+      preMeal: buildContextChart('pre-meal', 'Pre-Meal Glucose (mg/dL)', 'hsl(38, 92%, 52%)', 'hsla(38, 92%, 52%, 0.12)'),
+      postMeal: buildContextChart('post-meal', 'Post-Meal Glucose (mg/dL)', 'hsl(275, 80%, 60%)', 'hsla(275, 80%, 60%, 0.12)')
+    };
   }, [filteredLogs, metric]);
 
   const chartOptions = {
@@ -349,60 +330,62 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
               <h3>{titles[metric]}</h3>
             </div>
           </div>
-          <div className="chart-container-large">
-            {filteredLogs.length > 0 ? (
 
-              metric === 'glucose' ? (
-
-                <div className="glucose-charts-grid">
-
-                  <div className="mb-4">
-                    <h4>Fasting Glucose</h4>
-                    <div style={{ height: '250px' }}>
-                      <Line
-                        data={(chartData as any).fasting}
-                        options={chartOptions}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <h4>Pre-Meal Glucose</h4>
-                    <div style={{ height: '250px' }}>
-                      <Line
-                        data={(chartData as any).preMeal}
-                        options={chartOptions}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4>Post-Meal Glucose</h4>
-                    <div style={{ height: '250px' }}>
-                      <Line
-                        data={(chartData as any).postMeal}
-                        options={chartOptions}
-                      />
-                    </div>
-                  </div>
-
-                </div>
-
+          {metric !== 'glucose' ? (
+            <div className="chart-container-large">
+              {filteredLogs.length > 0 ? (
+                <Line data={chartData} options={chartOptions} />
               ) : (
-
-                <Line
-                  data={chartData as any}
-                  options={chartOptions}
-                />
-
-              )
-
-            ) : (
-              <div className="d-flex align-center justify-center h-100 text-muted">
-                No logs recorded within this time range. Add health logs to view statistics.
+                <div className="d-flex align-center justify-center h-100 text-muted">
+                  No logs recorded within this time range. Add health logs to view statistics.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="glucose-charts-stack">
+              {/* Fasting Chart */}
+              <div className="glucose-chart-section">
+                <h4 className="glucose-chart-label color-success">🟢 Fasting</h4>
+                <div className="chart-container">
+                  {glucoseCharts && glucoseCharts.fasting.logs.length > 0 ? (
+                    <Line data={glucoseCharts.fasting.data} options={chartOptions} />
+                  ) : (
+                    <div className="d-flex align-center justify-center h-100 text-muted text-sm">
+                      No fasting glucose readings in this range.
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Pre-Meal Chart */}
+              <div className="glucose-chart-section">
+                <h4 className="glucose-chart-label color-warning">🟠 Pre-Meal</h4>
+                <div className="chart-container">
+                  {glucoseCharts && glucoseCharts.preMeal.logs.length > 0 ? (
+                    <Line data={glucoseCharts.preMeal.data} options={chartOptions} />
+                  ) : (
+                    <div className="d-flex align-center justify-center h-100 text-muted text-sm">
+                      No pre-meal glucose readings in this range.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Post-Meal Chart */}
+              <div className="glucose-chart-section">
+                <h4 className="glucose-chart-label color-purple">🟣 Post-Meal</h4>
+                <div className="chart-container">
+                  {glucoseCharts && glucoseCharts.postMeal.logs.length > 0 ? (
+                    <Line data={glucoseCharts.postMeal.data} options={chartOptions} />
+                  ) : (
+                    <div className="d-flex align-center justify-center h-100 text-muted text-sm">
+                      No post-meal glucose readings in this range.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Statistics Panel */}

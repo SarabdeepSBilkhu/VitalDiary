@@ -557,6 +557,28 @@ button {
   position: relative;
 }
 
+/* Glucose: three stacked per-context charts */
+.glucose-charts-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.glucose-chart-section {
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 1rem;
+}
+
+.glucose-chart-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.color-purple { color: var(--color-purple); }
+
 .summary-list {
   display: flex;
   flex-direction: column;
