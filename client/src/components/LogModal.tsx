@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X, Activity, Thermometer } from 'lucide-react';
-import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
+import { X, Activity, Thermometer, Weight, FileText } from 'lucide-react';
 
 interface LogModalProps {
   isOpen: boolean;
   onClose: () => void;
-  logToEdit: VitalsRecord | GlucoseRecord | null;
+  logToEdit: any | null;
   onSaveVitals: (data: any) => Promise<void>;
   onSaveGlucose: (data: any) => Promise<void>;
+  onSaveWeight: (data: any) => Promise<void>;
+  onSaveReport: (data: any) => Promise<void>;
   showToast: (msg: string, type?: 'success' | 'danger' | 'warning' | 'info') => void;
   selectedCalendarDate: Date | null;
 }
@@ -23,10 +24,12 @@ export const LogModal: React.FC<LogModalProps> = ({
   logToEdit,
   onSaveVitals,
   onSaveGlucose,
+  onSaveWeight,
+  onSaveReport,
   showToast,
   selectedCalendarDate
 }) => {
-  const [activeTab, setActiveTab] = useState<'vitals' | 'glucose'>('vitals');
+  const [activeTab, setActiveTab] = useState<'vitals' | 'glucose' | 'weight' | 'reports'>('vitals');
   
   // Vitals State
   const [vitalDate, setVitalDate] = useState('');
@@ -42,6 +45,18 @@ export const LogModal: React.FC<LogModalProps> = ({
   const [glucoseContext, setGlucoseContext] = useState<'fasting' | 'pre-meal' | 'post-meal'>('post-meal');
   const [glucoseNotes, setGlucoseNotes] = useState('');
 
+  // Weight State
+  const [weightDate, setWeightDate] = useState('');
+  const [weightValue, setWeightValue] = useState('');
+  const [weightNotes, setWeightNotes] = useState('');
+
+  // Medical Reports State
+  const [reportDate, setReportDate] = useState('');
+  const [reportType, setReportType] = useState('Blood');
+  const [reportTitle, setReportTitle] = useState('');
+  const [reportData, setReportData] = useState('');
+  const [reportNotes, setReportNotes] = useState('');
+
   const [loading, setLoading] = useState(false);
 
   // Sync state with logToEdit or default
@@ -52,7 +67,7 @@ export const LogModal: React.FC<LogModalProps> = ({
         const formatted = getLocalISOString(d);
 
         if ('systolic' in logToEdit) {
-          // It's a vitals log
+          // Vitals
           setActiveTab('vitals');
           setVitalDate(formatted);
           setSystolic(String(logToEdit.systolic));
@@ -60,28 +75,36 @@ export const LogModal: React.FC<LogModalProps> = ({
           setHr(String(logToEdit.hr));
           setSpo2(logToEdit.spo2 ? String(logToEdit.spo2) : '');
           setVitalNotes(logToEdit.notes || '');
-        } else {
-          // It's a glucose log
+        } else if ('context' in logToEdit) {
+          // Glucose
           setActiveTab('glucose');
           setGlucoseDate(formatted);
           setGlucoseValue(String(logToEdit.value));
           setGlucoseContext(logToEdit.context);
           setGlucoseNotes(logToEdit.notes || '');
+        } else if ('report_type' in logToEdit) {
+          // Medical Reports
+          setActiveTab('reports');
+          setReportDate(formatted);
+          setReportType(logToEdit.report_type);
+          setReportTitle(logToEdit.title);
+          setReportData(logToEdit.data || '');
+          setReportNotes(logToEdit.notes || '');
+        } else {
+          // Weight
+          setActiveTab('weight');
+          setWeightDate(formatted);
+          setWeightValue(String(logToEdit.value));
+          setWeightNotes(logToEdit.notes || '');
         }
       } else {
         // Logging a new record
         const defaultDate = selectedCalendarDate ? new Date(selectedCalendarDate) : new Date();
-        if (!selectedCalendarDate) {
-          // if it's current time, set current hours and minutes
-          const now = new Date();
-          defaultDate.setHours(now.getHours(), now.getMinutes());
-        } else {
-          const now = new Date();
-          defaultDate.setHours(now.getHours(), now.getMinutes());
-        }
+        const now = new Date();
+        defaultDate.setHours(now.getHours(), now.getMinutes());
         const formatted = getLocalISOString(defaultDate);
 
-        // Reset vitals
+        // Reset all forms
         setVitalDate(formatted);
         setSystolic('');
         setDiastolic('');
@@ -89,11 +112,20 @@ export const LogModal: React.FC<LogModalProps> = ({
         setSpo2('');
         setVitalNotes('');
 
-        // Reset glucose
         setGlucoseDate(formatted);
         setGlucoseValue('');
         setGlucoseContext('post-meal');
         setGlucoseNotes('');
+
+        setWeightDate(formatted);
+        setWeightValue('');
+        setWeightNotes('');
+
+        setReportDate(formatted);
+        setReportType('Blood');
+        setReportTitle('');
+        setReportData('');
+        setReportNotes('');
       }
     }
   }, [isOpen, logToEdit, selectedCalendarDate]);
@@ -116,12 +148,10 @@ export const LogModal: React.FC<LogModalProps> = ({
       showToast('Please enter blood pressure within physiological limits (Systolic: 50-250, Diastolic: 30-180).', 'warning');
       return;
     }
-
     if (hrNum < 30 || hrNum > 220) {
       showToast('Please enter a valid heart rate (30-220 bpm).', 'warning');
       return;
     }
-
     if (spo2Num !== null && (spo2Num < 50 || spo2Num > 100)) {
       showToast('Please enter a valid SpO2 percentage (50-100%).', 'warning');
       return;
@@ -176,6 +206,60 @@ export const LogModal: React.FC<LogModalProps> = ({
     }
   };
 
+  const handleWeightSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!weightDate || !weightValue) {
+      showToast('Please fill out all required fields.', 'warning');
+      return;
+    }
+
+    const valueNum = parseFloat(weightValue);
+    if (valueNum < 5 || valueNum > 500) {
+      showToast('Please enter a realistic weight value (5-500).', 'warning');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await onSaveWeight({
+        id: logToEdit ? logToEdit.id : undefined,
+        timestamp: new Date(weightDate).toISOString(),
+        value: valueNum,
+        notes: weightNotes
+      });
+      onClose();
+    } catch (err: any) {
+      showToast(err.message || 'Error saving weight records.', 'danger');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportDate || !reportType || !reportTitle) {
+      showToast('Please fill out all required fields.', 'warning');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await onSaveReport({
+        id: logToEdit ? logToEdit.id : undefined,
+        timestamp: new Date(reportDate).toISOString(),
+        report_type: reportType,
+        title: reportTitle,
+        data: reportData,
+        notes: reportNotes
+      });
+      onClose();
+    } catch (err: any) {
+      showToast(err.message || 'Error saving medical report.', 'danger');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="modal-overlay active" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
@@ -189,39 +273,51 @@ export const LogModal: React.FC<LogModalProps> = ({
 
         {/* Show tabs only when logging new, disable tab switching when editing */}
         {!logToEdit && (
-          <div className="modal-tabs">
+          <div className="modal-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
             <button 
               type="button"
               className={`modal-tab ${activeTab === 'vitals' ? 'active' : ''}`}
               onClick={() => setActiveTab('vitals')}
             >
-              <Activity size={18} /> Vitals (BP, HR, SpO₂)
+              <Activity size={16} /> Vitals
             </button>
             <button 
               type="button"
               className={`modal-tab ${activeTab === 'glucose' ? 'active' : ''}`}
               onClick={() => setActiveTab('glucose')}
             >
-              <Thermometer size={18} /> Glucose
+              <Thermometer size={16} /> Glucose
+            </button>
+            <button 
+              type="button"
+              className={`modal-tab ${activeTab === 'weight' ? 'active' : ''}`}
+              onClick={() => setActiveTab('weight')}
+            >
+              <Weight size={16} /> Weight
+            </button>
+            <button 
+              type="button"
+              className={`modal-tab ${activeTab === 'reports' ? 'active' : ''}`}
+              onClick={() => setActiveTab('reports')}
+            >
+              <FileText size={16} /> Medical Report
             </button>
           </div>
         )}
 
-        {activeTab === 'vitals' ? (
+        {activeTab === 'vitals' && (
           <form onSubmit={handleVitalsSubmit} className="modal-tab-content active">
             <div className="form-grid">
               <div className="form-group grid-col-2">
                 <label htmlFor="modal-vital-date">Date & Time *</label>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <input 
-                    type="datetime-local" 
-                    id="modal-vital-date" 
-                    className="form-control"
-                    value={vitalDate}
-                    onChange={(e) => setVitalDate(e.target.value)}
-                    required 
-                  />
-                </div>
+                <input 
+                  type="datetime-local" 
+                  id="modal-vital-date" 
+                  className="form-control"
+                  value={vitalDate}
+                  onChange={(e) => setVitalDate(e.target.value)}
+                  required 
+                />
               </div>
               
               <div className="form-group">
@@ -315,7 +411,9 @@ export const LogModal: React.FC<LogModalProps> = ({
               </button>
             </div>
           </form>
-        ) : (
+        )}
+
+        {activeTab === 'glucose' && (
           <form onSubmit={handleGlucoseSubmit} className="modal-tab-content active">
             <div className="form-grid">
               <div className="form-group grid-col-2">
@@ -380,6 +478,145 @@ export const LogModal: React.FC<LogModalProps> = ({
               <button type="button" className="btn btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
                 {loading ? 'Saving...' : 'Save Glucose'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {activeTab === 'weight' && (
+          <form onSubmit={handleWeightSubmit} className="modal-tab-content active">
+            <div className="form-grid">
+              <div className="form-group grid-col-2">
+                <label htmlFor="modal-weight-date">Date & Time *</label>
+                <input 
+                  type="datetime-local" 
+                  id="modal-weight-date" 
+                  className="form-control"
+                  value={weightDate}
+                  onChange={(e) => setWeightDate(e.target.value)}
+                  required 
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="modal-weight-value">Weight *</label>
+                <div className="input-unit-wrapper">
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    id="modal-weight-value" 
+                    min="5" 
+                    max="500" 
+                    placeholder="e.g. 74.5" 
+                    className="form-control"
+                    value={weightValue}
+                    onChange={(e) => setWeightValue(e.target.value)}
+                    required 
+                  />
+                  <span className="input-unit">kg</span>
+                </div>
+              </div>
+
+              <div className="form-group grid-col-2">
+                <label htmlFor="modal-weight-notes">Notes / Scale context</label>
+                <textarea 
+                  id="modal-weight-notes" 
+                  rows={2} 
+                  className="form-control" 
+                  placeholder="Morning empty stomach, post-workout, clothed, etc."
+                  value={weightNotes}
+                  onChange={(e) => setWeightNotes(e.target.value)}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Saving...' : 'Save Weight'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {activeTab === 'reports' && (
+          <form onSubmit={handleReportSubmit} className="modal-tab-content active">
+            <div className="form-grid">
+              <div className="form-group grid-col-2">
+                <label htmlFor="modal-report-date">Date & Time *</label>
+                <input 
+                  type="datetime-local" 
+                  id="modal-report-date" 
+                  className="form-control"
+                  value={reportDate}
+                  onChange={(e) => setReportDate(e.target.value)}
+                  required 
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="modal-report-type">Report Type *</label>
+                <select 
+                  id="modal-report-type" 
+                  className="form-control"
+                  value={reportType}
+                  onChange={(e) => setReportType(e.target.value)}
+                  required
+                >
+                  <option value="Blood">Blood Report</option>
+                  <option value="Urine">Urine Report</option>
+                  <option value="Thyroid">Thyroid Panel</option>
+                  <option value="Lipids">Cholesterol / Lipids</option>
+                  <option value="Liver">Liver Function</option>
+                  <option value="Renal">Kidney Function</option>
+                  <option value="Imaging">X-Ray / MRI / Ultrasound</option>
+                  <option value="Other">Other Lab Report</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="modal-report-title">Report Title *</label>
+                <input 
+                  type="text" 
+                  id="modal-report-title" 
+                  className="form-control"
+                  placeholder="e.g. CBC or Lipid Profile"
+                  value={reportTitle}
+                  onChange={(e) => setReportTitle(e.target.value)}
+                  required 
+                />
+              </div>
+
+              <div className="form-group grid-col-2">
+                <label htmlFor="modal-report-data">Lab Results / Reference Ranges *</label>
+                <textarea 
+                  id="modal-report-data" 
+                  rows={4} 
+                  className="form-control font-monospace" 
+                  placeholder="Manually type details (e.g. Hb: 13.5, Cholesterol: 190, Creatinine: 0.9)"
+                  value={reportData}
+                  onChange={(e) => setReportData(e.target.value)}
+                  required
+                ></textarea>
+              </div>
+
+              <div className="form-group grid-col-2">
+                <label htmlFor="modal-report-notes">Doctor / Facility / Notes</label>
+                <textarea 
+                  id="modal-report-notes" 
+                  rows={2} 
+                  className="form-control" 
+                  placeholder="Prescribed by Dr. Smith, City Clinic"
+                  value={reportNotes}
+                  onChange={(e) => setReportNotes(e.target.value)}
+                ></textarea>
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline" onClick={onClose} disabled={loading}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={loading}>
+                {loading ? 'Saving...' : 'Save Report'}
               </button>
             </div>
           </form>

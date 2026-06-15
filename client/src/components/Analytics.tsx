@@ -1,22 +1,24 @@
 import React, { useState, useMemo } from 'react';
 import { Calculator, LineChart as ChartIcon } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
+import type { WeightRecord } from '../utils/api';
 import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel } from '../utils/evaluators';
 import { Line } from 'react-chartjs-2';
 
 interface AnalyticsProps {
   vitals: VitalsRecord[];
   glucose: GlucoseRecord[];
+  weights: WeightRecord[];
 }
 
-export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
-  const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose'>('bp');
+export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }) => {
+  const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight'>('bp');
   const [timeframe, setTimeframe] = useState<'7days' | '30days' | 'year' | 'all'>('30days');
 
   // 1. Filter logs by metric and timeframe
   const filteredLogs = useMemo(() => {
     const now = new Date();
-    const sourceLogs = (metric === 'glucose') ? glucose : vitals;
+    const sourceLogs = (metric === 'glucose') ? glucose : (metric === 'weight' ? weights : vitals);
 
     let filtered = sourceLogs.filter(log => {
       const logDate = new Date(log.timestamp);
@@ -31,7 +33,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
 
     // Chronological order for chart display
     return [...filtered].reverse();
-  }, [metric, timeframe, vitals, glucose]);
+  }, [metric, timeframe, vitals, glucose, weights]);
 
   // 2. Calculate Stats based on filtered logs
   const stats = useMemo(() => {
@@ -62,10 +64,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
       const sortedSys = [...bpLogs].sort((a, b) => b.systolic - a.systolic);
       const highest = sortedSys[0];
       const sortedDia = [...bpLogs].sort((a, b) => a.diastolic - b.diastolic);
-      const lowest = sortedDia[0];
 
       results.highest = `${highest.systolic}/${highest.diastolic}`;
-      results.lowest = `${lowest.systolic}/${lowest.diastolic}`;
+      results.lowest = `${sortedDia[0].systolic}/${sortedDia[0].diastolic}`;
 
       bpLogs.forEach(log => {
         const evalRes = evaluateBP(log.systolic, log.diastolic);
@@ -136,6 +137,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
         if (evalRes.className === 'status-normal') normalCount++;
         else if (evalRes.className === 'status-elevated') warningCount++;
         else criticalCount++;
+      });
+    } else if (metric === 'weight') {
+      const wtLogs = filteredLogs as WeightRecord[];
+      const wtSum = wtLogs.reduce((a, b) => a + b.value, 0);
+      results.avg = wtLogs.length > 0 ? `${(wtSum / wtLogs.length).toFixed(1)} kg` : '--';
+
+      if (wtLogs.length > 0) {
+        const sortedWt = [...wtLogs].sort((a, b) => b.value - a.value);
+        results.highest = `${sortedWt[0].value} kg`;
+        results.lowest = `${sortedWt[sortedWt.length - 1].value} kg`;
+      }
+
+      wtLogs.forEach(() => {
+        normalCount++;
       });
     }
 
@@ -215,6 +230,23 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
           }
         ]
       };
+    } else if (metric === 'weight') {
+      const wtLogs = filteredLogs as WeightRecord[];
+      return {
+        labels,
+        datasets: [
+          {
+            label: 'Body Weight (kg)',
+            data: wtLogs.map(l => l.value),
+            borderColor: 'hsl(150, 80%, 40%)',
+            backgroundColor: 'hsla(150, 80%, 40%, 0.15)',
+            borderWidth: 3,
+            tension: 0.2,
+            fill: true,
+            pointBackgroundColor: 'hsl(150, 80%, 40%)'
+          }
+        ]
+      };
     } else {
       // Glucose: return empty, handled by separate useMemo
       return { labels: [], datasets: [] };
@@ -249,9 +281,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
     };
 
     return {
-      fasting: buildContextChart('fasting', 'Fasting Glucose (mg/dL)', 'hsl(145, 70%, 43%)', 'hsla(145, 70%, 43%, 0.12)'),
-      preMeal: buildContextChart('pre-meal', 'Pre-Meal Glucose (mg/dL)', 'hsl(38, 92%, 52%)', 'hsla(38, 92%, 52%, 0.12)'),
-      postMeal: buildContextChart('post-meal', 'Post-Meal Glucose (mg/dL)', 'hsl(275, 80%, 60%)', 'hsla(275, 80%, 60%, 0.12)')
+      fasting: buildContextChart('fasting', 'Fasting Glucose (mg/dL)', 'hsl(150, 80%, 40%)', 'hsla(150, 80%, 40%, 0.1)'),
+      preMeal: buildContextChart('pre-meal', 'Pre-Meal Glucose (mg/dL)', 'hsl(35, 90%, 55%)', 'hsla(35, 90%, 55%, 0.1)'),
+      postMeal: buildContextChart('post-meal', 'Post-Meal Glucose (mg/dL)', 'hsl(280, 80%, 60%)', 'hsla(280, 80%, 60%, 0.1)')
     };
   }, [filteredLogs, metric]);
 
@@ -283,7 +315,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
     bp: "Blood Pressure Trends",
     hr: "Heart Rate (BPM) Log",
     spo2: "Oxygen Saturation (SpO₂) History",
-    glucose: "Blood Glucose levels"
+    glucose: "Blood Glucose levels",
+    weight: "Weight Tracker History"
   };
 
   return (
@@ -302,6 +335,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose }) => {
               <option value="hr">Heart Rate</option>
               <option value="spo2">Blood Oxygen (SpO₂)</option>
               <option value="glucose">Blood Glucose</option>
+              <option value="weight">Body Weight</option>
             </select>
           </div>
           <div className="filter-group">

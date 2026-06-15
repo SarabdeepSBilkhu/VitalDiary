@@ -98,14 +98,23 @@ const dbQuery = {
   }
 };
 
+let isDbReady = false;
+
+function getDbReady() {
+  return isDbReady;
+}
+
 // Initialize Tables with a retry mechanism
-async function initDatabase(retries = 6, delay = 4000) {
+async function initDatabase(retries = 15, delay = 4000) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       if (isPg) {
         // Test query to ensure connection is live
         await pool.query('SELECT 1');
         console.log('Connected to the PostgreSQL database.');
+      } else {
+        // SQLite: check connection is live
+        await dbQuery.get('SELECT 1');
       }
 
       // 1. Users Table
@@ -146,17 +155,47 @@ async function initDatabase(retries = 6, delay = 4000) {
         )
       `);
 
+      // 4. Weight Table
+      await dbQuery.run(`
+        CREATE TABLE IF NOT EXISTS weight (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          timestamp DATETIME NOT NULL,
+          value REAL NOT NULL,
+          notes TEXT,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+      `);
+
+      // 5. Medical Reports Table
+      await dbQuery.run(`
+        CREATE TABLE IF NOT EXISTS reports (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          timestamp DATETIME NOT NULL,
+          report_type TEXT NOT NULL, -- blood, urine, etc.
+          title TEXT NOT NULL,
+          data TEXT, -- manual typed findings
+          notes TEXT,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+      `);
+
       // Create indexes for efficient retrieval scoped by user and ordered by time
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_vitals_user_time ON vitals(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_glucose_user_time ON glucose(user_id, timestamp DESC)`);
+      await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_weight_user_time ON weight(user_id, timestamp DESC)`);
+      await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_reports_user_time ON reports(user_id, timestamp DESC)`);
 
       console.log('Database schemas successfully verified/created.');
+      isDbReady = true;
       return; // Database successfully initialized
     } catch (error) {
       console.error(`Database connection attempt ${attempt}/${retries} failed:`, error.message);
       if (attempt === retries) {
-        console.error('All database connection attempts failed. Exiting process.');
-        process.exit(1);
+        console.error('All initial database connection attempts failed. Switching to infinite background retries...');
+        startBackgroundRetries(10000);
+        return;
       }
       console.log(`Retrying connection in ${delay / 1000} seconds...`);
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -164,8 +203,28 @@ async function initDatabase(retries = 6, delay = 4000) {
   }
 }
 
+// Keep retrying in the background so the server doesn't crash on cold start but remains alive
+function startBackgroundRetries(delay = 10000) {
+  const timer = setInterval(async () => {
+    try {
+      if (isPg) {
+        await pool.query('SELECT 1');
+      } else {
+        await dbQuery.get('SELECT 1');
+      }
+      clearInterval(timer);
+      console.log('Database connected on background retry. Re-running initialization...');
+      // Re-run initialization (which sets isDbReady = true upon success)
+      await initDatabase(1, 0);
+    } catch (err) {
+      console.error('Background database connection retry failed:', err.message);
+    }
+  }, delay);
+}
+
 module.exports = {
   db: isPg ? pool : db,
   dbQuery,
-  initDatabase
+  initDatabase,
+  getDbReady
 };

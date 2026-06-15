@@ -1,9 +1,10 @@
 import React from 'react';
 import {
   Activity, Heart, Droplet, Thermometer, TrendingUp, Sparkles,
-  PlusCircle, Clock, Edit3, Trash2
+  Clock, Edit3, Trash2, Weight, FileText
 } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
+import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel } from '../utils/evaluators';
 import {
   Chart as ChartJS,
@@ -29,15 +30,19 @@ const fmtDT = (ts: string) => {
 interface DashboardProps {
   vitals: VitalsRecord[];
   glucose: GlucoseRecord[];
+  weights: WeightRecord[];
+  reports: ReportRecord[];
   allLogs: any[];
   onOpenLogModal: (log?: any) => void;
-  onDeleteLog: (id: string, type: 'vitals' | 'glucose') => void;
+  onDeleteLog: (id: string, type: 'vitals' | 'glucose' | 'weight' | 'reports') => void;
   onNavigate: (view: string) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   vitals,
   glucose,
+  weights,
+  reports,
   allLogs,
   onOpenLogModal,
   onDeleteLog,
@@ -47,6 +52,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // 1. Latest card values
   const latestVital = vitals[0] || null;
   const latestGlucose = glucose[0] || null;
+  const latestWeight = weights[0] || null;
+  const latestReport = reports[0] || null;
 
   const bpEval = latestVital ? evaluateBP(latestVital.systolic, latestVital.diastolic) : null;
   const hrEval = latestVital ? evaluateHR(latestVital.hr) : null;
@@ -57,8 +64,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const avgBP = () => {
     if (vitals.length === 0) return '--/-- mmHg';
     const sysSum = vitals.reduce((acc, l) => acc + l.systolic, 0);
-    const diaSum = vitals.reduce((acc, l) => acc + l.diastolic, 0);
-    return `${Math.round(sysSum / vitals.length)}/${Math.round(diaSum / vitals.length)} mmHg`;
+    const dbDiaSum = vitals.reduce((acc, l) => acc + l.diastolic, 0);
+    return `${Math.round(sysSum / vitals.length)}/${Math.round(dbDiaSum / vitals.length)} mmHg`;
   };
 
   const avgHR = () => {
@@ -242,6 +249,52 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
+        {/* Weight Card */}
+        <div className="metric-card weight-card" id="card-weight">
+          <div className="card-header">
+            <div className="icon-wrapper bg-green" style={{ backgroundColor: 'hsla(150, 80%, 40%, 0.15)', color: 'hsl(150, 80%, 40%)' }}>
+              <Weight size={20} />
+            </div>
+            <span className="metric-title">Body Weight</span>
+          </div>
+          <div className="card-value-container">
+            <div className="card-value" id="latest-weight">
+              {latestWeight ? latestWeight.value : '--'}
+            </div>
+            <span className="card-unit">kg</span>
+          </div>
+          <div className="card-footer">
+            <span className="status-indicator status-info">Active Track</span>
+            <span className="time-stamp" id="time-weight">
+              {latestWeight ? fmtDT(latestWeight.timestamp) : '--'}
+            </span>
+          </div>
+        </div>
+
+        {/* Medical Reports Card */}
+        <div className="metric-card reports-card" id="card-reports">
+          <div className="card-header">
+            <div className="icon-wrapper bg-orange" style={{ backgroundColor: 'hsla(30, 90%, 50%, 0.15)', color: 'hsl(30, 90%, 50%)' }}>
+              <FileText size={20} />
+            </div>
+            <span className="metric-title">Medical Reports</span>
+          </div>
+          <div className="card-value-container">
+            <div className="card-value" id="latest-report">
+              {reports.length}
+            </div>
+            <span className="card-unit">files</span>
+          </div>
+          <div className="card-footer">
+            <span className="status-indicator status-warning capitalize" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {latestReport ? latestReport.title : 'None Logged'}
+            </span>
+            <span className="time-stamp" id="time-report">
+              {latestReport ? fmtDT(latestReport.timestamp) : '--'}
+            </span>
+          </div>
+        </div>
+
       </div>
 
       {/* Dashboard Grid */}
@@ -299,12 +352,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="summary-value" id="summary-total-logs">{allLogs.length} readings</div>
             </div>
           </div>
-          <div className="summary-action-box">
-            <button className="btn btn-outline w-100" onClick={() => onOpenLogModal()}>
-              <PlusCircle size={16} /> Log BP, HR &amp; SpO₂
+          <div className="summary-action-box" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <button className="btn btn-outline" onClick={() => onOpenLogModal()}>
+              + Vitals
             </button>
-            <button className="btn btn-outline w-100" onClick={() => onOpenLogModal()}>
-              <PlusCircle size={16} /> Log Blood Glucose
+            <button className="btn btn-outline" onClick={() => onOpenLogModal()}>
+              + Glucose
+            </button>
+            <button className="btn btn-outline" onClick={() => onOpenLogModal()}>
+              + Weight
+            </button>
+            <button className="btn btn-outline" onClick={() => onOpenLogModal()}>
+              + Medical Report
             </button>
           </div>
         </div>
@@ -343,13 +402,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </tr>
               ) : (
                 recentLogs.map((log) => {
-                  const isVital = log.type === 'vitals' || 'systolic' in log;
                   let metricLabel;
                   let valueLabel;
                   let badgeText = '';
                   let badgeClass = '';
+                  const logType = log.type;
 
-                  if (isVital) {
+                  if (logType === 'vitals') {
                     const vitalLog = log as VitalsRecord;
                     metricLabel = (
                       <div className="d-flex align-center gap-2">
@@ -367,7 +426,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     const evalRes = evaluateBP(vitalLog.systolic, vitalLog.diastolic);
                     badgeText = evalRes.status;
                     badgeClass = evalRes.className;
-                  } else {
+                  } else if (logType === 'glucose') {
                     const glucoseLog = log as GlucoseRecord;
                     metricLabel = (
                       <div className="d-flex align-center gap-2">
@@ -381,6 +440,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     const evalRes = evaluateGlucose(glucoseLog.value, glucoseLog.context);
                     badgeText = evalRes.status;
                     badgeClass = evalRes.className;
+                  } else if (logType === 'weight') {
+                    const weightLog = log as WeightRecord;
+                    metricLabel = (
+                      <div className="d-flex align-center gap-2">
+                        <span className="badge bg-green" style={{ backgroundColor: 'hsla(150, 80%, 40%, 0.15)', color: 'hsl(150, 80%, 40%)' }} title="Weight Entry">
+                          <Weight size={12} style={{ marginRight: '4px' }} /> Weight
+                        </span>
+                      </div>
+                    );
+                    valueLabel = <span><strong>{weightLog.value}</strong> <span className="text-sm text-muted">kg</span></span>;
+                    badgeText = 'Logged';
+                    badgeClass = 'status-normal';
+                  } else {
+                    const reportLog = log as ReportRecord;
+                    metricLabel = (
+                      <div className="d-flex align-center gap-2">
+                        <span className="badge bg-orange" style={{ backgroundColor: 'hsla(30, 90%, 50%, 0.15)', color: 'hsl(30, 90%, 50%)' }} title="Medical Report">
+                          <FileText size={12} style={{ marginRight: '4px' }} /> Report
+                        </span>
+                        <span className="text-sm text-secondary">{reportLog.report_type}</span>
+                      </div>
+                    );
+                    valueLabel = <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}><strong>{reportLog.title}</strong></span>;
+                    badgeText = 'Saved';
+                    badgeClass = 'status-info';
                   }
 
                   return (
@@ -394,7 +478,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         title={log.notes || ''}
                       >
-                        {log.notes || '--'}
+                        {logType === 'reports' ? (log.data ? `Results: ${log.data} | ` : '') + (log.notes || '') : (log.notes || '--')}
                       </td>
                       <td>
                         <div className="action-buttons">
@@ -408,7 +492,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           <button
                             className="btn-table-action delete-action"
                             title="Delete Entry"
-                            onClick={() => onDeleteLog(log.id, isVital ? 'vitals' : 'glucose')}
+                            onClick={() => onDeleteLog(log.id, logType)}
                           >
                             <Trash2 size={16} />
                           </button>

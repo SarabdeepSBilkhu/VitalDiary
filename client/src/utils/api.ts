@@ -8,6 +8,24 @@ export interface User {
   email: string;
 }
 
+export interface WeightRecord {
+  id: string;
+  user_id: number;
+  timestamp: string;
+  value: number;
+  notes: string;
+}
+
+export interface ReportRecord {
+  id: string;
+  user_id: number;
+  timestamp: string;
+  report_type: string;
+  title: string;
+  data: string;
+  notes: string;
+}
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
@@ -37,7 +55,7 @@ export function setCurrentUser(user: User) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
-// Request dispatcher helper
+// Request dispatcher helper with auto-retry for database cold start warming
 async function request(url: string, method: string = 'GET', data?: any) {
   const token = getToken();
   
@@ -58,12 +76,44 @@ async function request(url: string, method: string = 'GET', data?: any) {
     config.body = JSON.stringify(data);
   }
 
-  const response = await fetch(url, config);
+  let response = await fetch(url, config);
+
+  // If database is waking up on Railway, auto-retry transparently
+  let attempts = 0;
+  const maxAttempts = 15;
+  
+  if (response.status === 503) {
+    let result;
+    try {
+      // Clone response to read json safely
+      result = await response.clone().json();
+    } catch {
+      result = {};
+    }
+
+    while (response.status === 503 && result.status === 'waking_up' && attempts < maxAttempts) {
+      attempts++;
+      window.dispatchEvent(new CustomEvent('db-waking-up', {
+        detail: { attempt: attempts, maxAttempts }
+      }));
+      
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      response = await fetch(url, config);
+      try {
+        result = await response.clone().json();
+      } catch {
+        result = {};
+      }
+    }
+
+    if (attempts > 0 && response.ok) {
+      window.dispatchEvent(new Event('db-ready'));
+    }
+  }
 
   if (response.status === 401 || response.status === 403) {
     // Session expired or unauthorized
     removeToken();
-    // Dispatch a custom event to alert App component to redirect to login
     window.dispatchEvent(new Event('auth-expired'));
     throw new Error('Authentication expired. Please log in again.');
   }
@@ -129,5 +179,39 @@ export const api = {
 
   async deleteGlucose(id: string) {
     return await request(`/api/glucose/${id}`, 'DELETE');
+  },
+
+  // Weight CRUD
+  async getWeight() {
+    return await request('/api/weight', 'GET');
+  },
+
+  async createWeight(data: any) {
+    return await request('/api/weight', 'POST', data);
+  },
+
+  async updateWeight(id: string, data: any) {
+    return await request(`/api/weight/${id}`, 'PUT', data);
+  },
+
+  async deleteWeight(id: string) {
+    return await request(`/api/weight/${id}`, 'DELETE');
+  },
+
+  // Reports CRUD
+  async getReports() {
+    return await request('/api/reports', 'GET');
+  },
+
+  async createReport(data: any) {
+    return await request('/api/reports', 'POST', data);
+  },
+
+  async updateReport(id: string, data: any) {
+    return await request(`/api/reports/${id}`, 'PUT', data);
+  },
+
+  async deleteReport(id: string) {
+    return await request(`/api/reports/${id}`, 'DELETE');
   }
 };

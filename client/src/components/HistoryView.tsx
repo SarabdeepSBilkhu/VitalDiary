@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Filter, Search, RotateCcw, Activity, Thermometer, Edit3, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Filter, Search, RotateCcw, Activity, Thermometer, Edit3, Trash2, ChevronLeft, ChevronRight, Weight, FileText } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
+import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
 
 const fmtDT = (ts: string) => {
@@ -12,7 +13,7 @@ const fmtDT = (ts: string) => {
 interface HistoryViewProps {
   allLogs: any[];
   onOpenLogModal: (log: any) => void;
-  onDeleteLog: (id: string, type: 'vitals' | 'glucose') => void;
+  onDeleteLog: (id: string, type: 'vitals' | 'glucose' | 'weight' | 'reports') => void;
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({
@@ -20,7 +21,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   onOpenLogModal,
   onDeleteLog
 }) => {
-  const [filterType, setFilterType] = useState<'all' | 'vitals' | 'glucose'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'vitals' | 'glucose' | 'weight' | 'reports'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -34,16 +35,18 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     let result = [...allLogs];
 
     // Filter by Type
-    if (filterType === 'vitals') {
-      result = result.filter(log => log.type === 'vitals' || 'systolic' in log);
-    } else if (filterType === 'glucose') {
-      result = result.filter(log => log.type === 'glucose' || 'value' in log);
+    if (filterType !== 'all') {
+      result = result.filter(log => log.type === filterType);
     }
 
-    // Filter by Search Note query
+    // Filter by Search Note query (including titles and report data)
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase().trim();
-      result = result.filter(log => log.notes && log.notes.toLowerCase().includes(q));
+      result = result.filter(log => 
+        (log.notes && log.notes.toLowerCase().includes(q)) ||
+        (log.title && log.title.toLowerCase().includes(q)) ||
+        (log.data && log.data.toLowerCase().includes(q))
+      );
     }
 
     // Filter by Start Date
@@ -100,13 +103,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         
         <div className="filters-grid">
           <div className="filter-group">
-            <label htmlFor="history-search">Search Notes</label>
+            <label htmlFor="history-search">Search Notes &amp; Lab Data</label>
             <div className="input-unit-wrapper">
               <input 
                 type="text" 
                 id="history-search" 
                 className="form-control" 
-                placeholder="Search notes / dietary observations..." 
+                placeholder="Search notes, report titles, or results..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ paddingLeft: '2.5rem' }}
@@ -128,6 +131,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               <option value="all">All Readings</option>
               <option value="vitals">Vitals Only (BP, HR, SpO₂)</option>
               <option value="glucose">Glucose Only</option>
+              <option value="weight">Weight Only</option>
+              <option value="reports">Medical Reports Only</option>
             </select>
           </div>
 
@@ -161,7 +166,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           <table className="table" id="history-logs-table">
             <thead>
               <tr>
-                <th>Date & Time</th>
+                <th>Date &amp; Time</th>
                 <th>Metric / Type</th>
                 <th>Recorded Value</th>
                 <th>Evaluation Status</th>
@@ -178,13 +183,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 </tr>
               ) : (
                 paginatedLogs.map(log => {
-                  const isVital = log.type === 'vitals' || 'systolic' in log;
                   let metricLabel;
                   let valueLabel;
                   let badgeText = '';
                   let badgeClass = '';
+                  const logType = log.type;
 
-                  if (isVital) {
+                  if (logType === 'vitals') {
                     const vitalLog = log as VitalsRecord;
                     metricLabel = (
                       <div className="d-flex align-center gap-2">
@@ -204,7 +209,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     const evalRes = evaluateBP(vitalLog.systolic, vitalLog.diastolic);
                     badgeText = evalRes.status;
                     badgeClass = evalRes.className;
-                  } else {
+                  } else if (logType === 'glucose') {
                     const glucoseLog = log as GlucoseRecord;
                     metricLabel = (
                       <div className="d-flex align-center gap-2">
@@ -218,6 +223,30 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     const evalRes = evaluateGlucose(glucoseLog.value, glucoseLog.context);
                     badgeText = evalRes.status;
                     badgeClass = evalRes.className;
+                  } else if (logType === 'weight') {
+                    const weightLog = log as WeightRecord;
+                    metricLabel = (
+                      <div className="d-flex align-center gap-2">
+                        <span className="badge bg-green" style={{ backgroundColor: 'hsla(150, 80%, 40%, 0.15)', color: 'hsl(150, 80%, 40%)' }}>
+                          <Weight size={12} style={{ marginRight: '4px' }} /> Weight
+                        </span>
+                      </div>
+                    );
+                    valueLabel = <span><strong>{weightLog.value}</strong> kg</span>;
+                    badgeText = 'Logged';
+                    badgeClass = 'status-normal';
+                  } else {
+                    const reportLog = log as ReportRecord;
+                    metricLabel = (
+                      <div className="d-flex align-center gap-2">
+                        <span className="badge bg-orange" style={{ backgroundColor: 'hsla(30, 90%, 50%, 0.15)', color: 'hsl(30, 90%, 50%)' }}>
+                          <FileText size={12} style={{ marginRight: '4px' }} /> Report ({reportLog.report_type})
+                        </span>
+                      </div>
+                    );
+                    valueLabel = <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}><strong>{reportLog.title}</strong></span>;
+                    badgeText = 'Saved';
+                    badgeClass = 'status-info';
                   }
 
                   return (
@@ -231,7 +260,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} 
                         title={log.notes || ''}
                       >
-                        {log.notes || '--'}
+                        {logType === 'reports' ? (log.data ? `Results: ${log.data} | ` : '') + (log.notes || '') : (log.notes || '--')}
                       </td>
                       <td>
                         <div className="action-buttons">
@@ -245,7 +274,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                           <button 
                             className="btn-table-action delete-action" 
                             title="Delete Entry"
-                            onClick={() => onDeleteLog(log.id, isVital ? 'vitals' : 'glucose')}
+                            onClick={() => onDeleteLog(log.id, logType)}
                           >
                             <Trash2 size={16} />
                           </button>

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { api, getCurrentUser, removeToken } from './utils/api';
 import type { VitalsRecord, GlucoseRecord } from './utils/evaluators';
+import type { WeightRecord, ReportRecord } from './utils/api';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { Dashboard } from './components/Dashboard';
@@ -30,12 +31,17 @@ export const App: React.FC = () => {
   // Data state
   const [vitals, setVitals] = useState<VitalsRecord[]>([]);
   const [glucose, setGlucose] = useState<GlucoseRecord[]>([]);
+  const [weights, setWeights] = useState<WeightRecord[]>([]);
+  const [reports, setReports] = useState<ReportRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
+  // DB Cold-start state
+  const [dbWaking, setDbWaking] = useState<{ attempt: number, maxAttempts: number } | null>(null);
+
   // Modal Dialogs state
   const [modalOpen, setModalOpen] = useState(false);
-  const [logToEdit, setLogToEdit] = useState<VitalsRecord | GlucoseRecord | null>(null);
+  const [logToEdit, setLogToEdit] = useState<any>(null);
   const [calendarDate, setCalendarDate] = useState<Date | null>(null);
 
   // Toast state
@@ -68,17 +74,39 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('auth-expired', handleAuthExpired);
   }, []);
 
-  // Fetch Vitals & Glucose
+  // Listen for database warming state
+  useEffect(() => {
+    const handleDbWaking = (e: any) => {
+      setDbWaking(e.detail);
+    };
+    const handleDbReady = () => {
+      setDbWaking(null);
+      showToast('Database connected successfully!', 'success');
+      handleRefreshData();
+    };
+    window.addEventListener('db-waking-up', handleDbWaking);
+    window.addEventListener('db-ready', handleDbReady);
+    return () => {
+      window.removeEventListener('db-waking-up', handleDbWaking);
+      window.removeEventListener('db-ready', handleDbReady);
+    };
+  }, []);
+
+  // Fetch all health logs
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [vitalsData, glucoseData] = await Promise.all([
+      const [vitalsData, glucoseData, weightData, reportsData] = await Promise.all([
         api.getVitals(),
-        api.getGlucose()
+        api.getGlucose(),
+        api.getWeight(),
+        api.getReports()
       ]);
       setVitals(vitalsData);
       setGlucose(glucoseData);
+      setWeights(weightData);
+      setReports(reportsData);
     } catch (err: any) {
       showToast(err.message || 'Error loading records.', 'danger');
     } finally {
@@ -101,11 +129,13 @@ export const App: React.FC = () => {
   const allLogs = useMemo(() => {
     const combined = [
       ...vitals.map(v => ({ ...v, type: 'vitals' })),
-      ...glucose.map(g => ({ ...g, type: 'glucose' }))
+      ...glucose.map(g => ({ ...g, type: 'glucose' })),
+      ...weights.map(w => ({ ...w, type: 'weight' })),
+      ...reports.map(r => ({ ...r, type: 'reports' }))
     ];
     // Sort descending by timestamp
     return combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [vitals, glucose]);
+  }, [vitals, glucose, weights, reports]);
 
   // Modal open helper
   const handleOpenLogModal = (log: any = null, defaultDate: Date | null = null) => {
@@ -123,12 +153,10 @@ export const App: React.FC = () => {
   // Save Handlers
   const handleSaveVitals = async (data: any) => {
     if (data.id) {
-      // Edit mode
       const updated = await api.updateVitals(data.id, data);
       setVitals(prev => prev.map(v => v.id === data.id ? updated : v));
       showToast('Vitals record updated successfully.', 'success');
     } else {
-      // Create mode
       const created = await api.createVitals(data);
       setVitals(prev => [created, ...prev]);
       showToast('Vitals record logged successfully.', 'success');
@@ -137,28 +165,56 @@ export const App: React.FC = () => {
 
   const handleSaveGlucose = async (data: any) => {
     if (data.id) {
-      // Edit mode
       const updated = await api.updateGlucose(data.id, data);
       setGlucose(prev => prev.map(g => g.id === data.id ? updated : g));
       showToast('Glucose record updated successfully.', 'success');
     } else {
-      // Create mode
       const created = await api.createGlucose(data);
       setGlucose(prev => [created, ...prev]);
       showToast('Glucose record logged successfully.', 'success');
     }
   };
 
+  const handleSaveWeight = async (data: any) => {
+    if (data.id) {
+      const updated = await api.updateWeight(data.id, data);
+      setWeights(prev => prev.map(w => w.id === data.id ? updated : w));
+      showToast('Weight record updated successfully.', 'success');
+    } else {
+      const created = await api.createWeight(data);
+      setWeights(prev => [created, ...prev]);
+      showToast('Weight record logged successfully.', 'success');
+    }
+  };
+
+  const handleSaveReport = async (data: any) => {
+    if (data.id) {
+      const updated = await api.updateReport(data.id, data);
+      setReports(prev => prev.map(r => r.id === data.id ? updated : r));
+      showToast('Medical report updated successfully.', 'success');
+    } else {
+      const created = await api.createReport(data);
+      setReports(prev => [created, ...prev]);
+      showToast('Medical report logged successfully.', 'success');
+    }
+  };
+
   // Delete Handler
-  const handleDeleteLog = async (id: string, type: 'vitals' | 'glucose') => {
+  const handleDeleteLog = async (id: string, type: 'vitals' | 'glucose' | 'weight' | 'reports') => {
     if (window.confirm('Are you sure you want to permanently delete this record?')) {
       try {
         if (type === 'vitals') {
           await api.deleteVitals(id);
           setVitals(prev => prev.filter(v => v.id !== id));
-        } else {
+        } else if (type === 'glucose') {
           await api.deleteGlucose(id);
           setGlucose(prev => prev.filter(g => g.id !== id));
+        } else if (type === 'weight') {
+          await api.deleteWeight(id);
+          setWeights(prev => prev.filter(w => w.id !== id));
+        } else if (type === 'reports') {
+          await api.deleteReport(id);
+          setReports(prev => prev.filter(r => r.id !== id));
         }
         showToast('Record deleted successfully.', 'success');
       } catch (err: any) {
@@ -175,7 +231,7 @@ export const App: React.FC = () => {
 
   // Render view dispatcher
   const renderView = () => {
-    if (loading && vitals.length === 0 && glucose.length === 0) {
+    if (loading && vitals.length === 0 && glucose.length === 0 && weights.length === 0 && reports.length === 0) {
       return (
         <div className="d-flex flex-column align-center justify-center py-5 h-100 text-muted">
           <Loader2 size={40} className="animate-spin color-primary mb-3" />
@@ -190,6 +246,8 @@ export const App: React.FC = () => {
           <Dashboard 
             vitals={vitals} 
             glucose={glucose} 
+            weights={weights}
+            reports={reports}
             allLogs={allLogs}
             onOpenLogModal={handleOpenLogModal}
             onDeleteLog={handleDeleteLog}
@@ -197,12 +255,14 @@ export const App: React.FC = () => {
           />
         );
       case 'analytics-view':
-        return <Analytics vitals={vitals} glucose={glucose} />;
+        return <Analytics vitals={vitals} glucose={glucose} weights={weights} />;
       case 'calendar-view':
         return (
           <CalendarView 
             vitals={vitals} 
             glucose={glucose} 
+            weights={weights}
+            reports={reports}
             allLogs={allLogs}
             onOpenLogModal={handleOpenLogModal}
             onDeleteLog={handleDeleteLog}
@@ -221,6 +281,8 @@ export const App: React.FC = () => {
           <Settings 
             vitals={vitals} 
             glucose={glucose} 
+            weights={weights}
+            reports={reports}
             allLogs={allLogs}
             userEmail={user?.email || 'User Account'}
             onLogout={handleLogout}
@@ -426,9 +488,25 @@ export const App: React.FC = () => {
         logToEdit={logToEdit}
         onSaveVitals={handleSaveVitals}
         onSaveGlucose={handleSaveGlucose}
+        onSaveWeight={handleSaveWeight}
+        onSaveReport={handleSaveReport}
         showToast={showToast}
         selectedCalendarDate={calendarDate}
       />
+
+      {/* Database waking status loader for cold-starts */}
+      {dbWaking && (
+        <div className="db-waking-overlay">
+          <div className="db-waking-card">
+            <Loader2 className="animate-spin color-primary mb-3" size={36} />
+            <h3>Database is warming up</h3>
+            <p>Railway database container is waking up from sleeping mode. This occurs on initial request and takes 10–25 seconds.</p>
+            <div className="progress-badge">
+              Connecting attempt {dbWaking.attempt} of {dbWaking.maxAttempts}...
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification Container */}
       <div className="toast-container">

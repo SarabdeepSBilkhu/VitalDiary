@@ -6,6 +6,7 @@ import {
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
+import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
 
 const fmtDT = (ts: string) => {
@@ -17,6 +18,8 @@ const fmtDT = (ts: string) => {
 interface SettingsProps {
   vitals: VitalsRecord[];
   glucose: GlucoseRecord[];
+  weights: WeightRecord[];
+  reports: ReportRecord[];
   allLogs: any[];
   userEmail: string;
   onLogout: () => void;
@@ -27,6 +30,8 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({
   vitals,
   glucose,
+  weights,
+  reports,
   allLogs,
   userEmail,
   onLogout,
@@ -45,16 +50,22 @@ export const Settings: React.FC<SettingsProps> = ({
     }
 
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Type,Timestamp/Date,Systolic (BP),Diastolic (BP),Heart Rate (bpm),Oxygen (SpO2 %),Glucose (mg/dL),Glucose Context,Notes/Comments\r\n";
+    csvContent += "Type,Timestamp/Date,Systolic (BP),Diastolic (BP),Heart Rate (bpm),Oxygen (SpO2 %),Glucose (mg/dL),Glucose Context,Weight (kg),Report Type,Report Title,Report Lab Data,Notes/Comments\r\n";
 
     allLogs.forEach(log => {
-      const isVital = log.type === 'vitals' || 'systolic' in log;
-      if (isVital) {
+      const type = log.type;
+      if (type === 'vitals') {
         const v = log as VitalsRecord;
-        csvContent += `Vitals,${v.timestamp},${v.systolic},${v.diastolic},${v.hr},${v.spo2 || ''},,,${(v.notes || '').replace(/"/g, '""')}\r\n`;
-      } else {
+        csvContent += `Vitals,${v.timestamp},${v.systolic},${v.diastolic},${v.hr},${v.spo2 || ''},,,,,,,${(v.notes || '').replace(/"/g, '""')}\r\n`;
+      } else if (type === 'glucose') {
         const g = log as GlucoseRecord;
-        csvContent += `Glucose,${g.timestamp},,,,${g.value},${g.context},${(g.notes || '').replace(/"/g, '""')}\r\n`;
+        csvContent += `Glucose,${g.timestamp},,,,${g.value},${g.context},,,,,${(g.notes || '').replace(/"/g, '""')}\r\n`;
+      } else if (type === 'weight') {
+        const w = log as WeightRecord;
+        csvContent += `Weight,${w.timestamp},,,,,,,,${w.value},,,,${(w.notes || '').replace(/"/g, '""')}\r\n`;
+      } else if (type === 'reports') {
+        const r = log as ReportRecord;
+        csvContent += `Report,${r.timestamp},,,,,,,,,,${r.report_type},"${r.title.replace(/"/g, '""')}","${(r.data || '').replace(/"/g, '""')}","${(r.notes || '').replace(/"/g, '""')}"\r\n`;
       }
     });
 
@@ -103,6 +114,30 @@ export const Settings: React.FC<SettingsProps> = ({
       }));
       const wsGlucose = XLSX.utils.json_to_sheet(glucoseData);
       XLSX.utils.book_append_sheet(wb, wsGlucose, "Glucose Logs");
+    }
+
+    // Weight Sheet
+    if (weights.length > 0) {
+      const weightData = weights.map(w => ({
+        "Date & Time": fmtDT(w.timestamp),
+        "Weight (kg)": w.value,
+        "Notes": w.notes || ''
+      }));
+      const wsWeight = XLSX.utils.json_to_sheet(weightData);
+      XLSX.utils.book_append_sheet(wb, wsWeight, "Weight Logs");
+    }
+
+    // Reports Sheet
+    if (reports.length > 0) {
+      const reportsData = reports.map(r => ({
+        "Date & Time": fmtDT(r.timestamp),
+        "Report Type": r.report_type,
+        "Title": r.title,
+        "Lab Results": r.data || '',
+        "Notes": r.notes || ''
+      }));
+      const wsReports = XLSX.utils.json_to_sheet(reportsData);
+      XLSX.utils.book_append_sheet(wb, wsReports, "Medical Reports");
     }
 
     if (wb.SheetNames.length === 0) {
@@ -238,6 +273,7 @@ export const Settings: React.FC<SettingsProps> = ({
     const glucoseToPrint = glucose.slice(0, 15);
     if (glucoseToPrint.length === 0) {
       doc.text("No glucose readings logs recorded.", 16, y + 5);
+      y += 10;
     } else {
       glucoseToPrint.forEach(g => {
         doc.text(fmtDT(g.timestamp), 16, y + 5);
@@ -245,6 +281,87 @@ export const Settings: React.FC<SettingsProps> = ({
         doc.text(g.context.toUpperCase(), 100, y + 5);
         doc.text(evaluateGlucose(g.value, g.context).status, 130, y + 5);
         doc.text(g.notes ? (g.notes.substring(0, 16) + (g.notes.length > 16 ? '..' : '')) : '', 165, y + 5);
+        y += 7;
+      });
+    }
+
+    y += 10;
+
+    // Weight Table Title
+    if (y > 240) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(50, 50, 50);
+    doc.text("3. WEIGHT TRACKER LOGS", 14, y);
+    y += 6;
+
+    doc.setFillColor(34, 139, 34); // Forest green
+    doc.rect(14, y, 182, 7, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Date & Time", 16, y + 5);
+    doc.text("Weight (kg)", 80, y + 5);
+    doc.text("Notes", 130, y + 5);
+
+    y += 7;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60, 60, 60);
+
+    const weightsToPrint = weights.slice(0, 10);
+    if (weightsToPrint.length === 0) {
+      doc.text("No weight data logs recorded.", 16, y + 5);
+      y += 10;
+    } else {
+      weightsToPrint.forEach(w => {
+        doc.text(fmtDT(w.timestamp), 16, y + 5);
+        doc.text(`${w.value} kg`, 80, y + 5);
+        doc.text(w.notes ? (w.notes.substring(0, 30) + (w.notes.length > 30 ? '..' : '')) : '', 130, y + 5);
+        y += 7;
+      });
+    }
+
+    y += 10;
+
+    // Reports Table Title
+    if (y > 240) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(50, 50, 50);
+    doc.text("4. MEDICAL LAB REPORTS", 14, y);
+    y += 6;
+
+    doc.setFillColor(210, 105, 30); // Orange/Brown
+    doc.rect(14, y, 182, 7, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Date & Time", 16, y + 5);
+    doc.text("Type", 60, y + 5);
+    doc.text("Title", 90, y + 5);
+    doc.text("Notes / Observations", 140, y + 5);
+
+    y += 7;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(60, 60, 60);
+
+    const reportsToPrint = reports.slice(0, 10);
+    if (reportsToPrint.length === 0) {
+      doc.text("No medical reports saved.", 16, y + 5);
+    } else {
+      reportsToPrint.forEach(r => {
+        doc.text(fmtDT(r.timestamp), 16, y + 5);
+        doc.text(r.report_type, 60, y + 5);
+        doc.text(r.title.substring(0, 22), 90, y + 5);
+        doc.text(r.notes ? (r.notes.substring(0, 25) + (r.notes.length > 25 ? '..' : '')) : '', 140, y + 5);
         y += 7;
       });
     }
@@ -260,7 +377,9 @@ export const Settings: React.FC<SettingsProps> = ({
       exportedAt: new Date().toISOString(),
       user: userEmail,
       vitals,
-      glucose
+      glucose,
+      weights,
+      reports
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupObj, null, 2));
@@ -287,8 +406,8 @@ export const Settings: React.FC<SettingsProps> = ({
       try {
         const backup = JSON.parse(event.target?.result as string);
         
-        if (!backup.vitals && !backup.glucose) {
-          showToast('Invalid backup file structure. Missing vitals or glucose arrays.', 'danger');
+        if (!backup.vitals && !backup.glucose && !backup.weights && !backup.reports) {
+          showToast('Invalid backup file structure. Missing data arrays.', 'danger');
           return;
         }
 
@@ -297,6 +416,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
         const vitalsRestoreList = Array.isArray(backup.vitals) ? backup.vitals : [];
         const glucoseRestoreList = Array.isArray(backup.glucose) ? backup.glucose : [];
+        const weightsRestoreList = Array.isArray(backup.weights) ? backup.weights : [];
+        const reportsRestoreList = Array.isArray(backup.reports) ? backup.reports : [];
 
         // Restore Vitals
         await fetch('/api/vitals/restore', {
@@ -316,6 +437,26 @@ export const Settings: React.FC<SettingsProps> = ({
             'Authorization': `Bearer ${localStorage.getItem('vital_diary_token')}`
           },
           body: JSON.stringify({ logs: glucoseRestoreList })
+        });
+
+        // Restore Weights
+        await fetch('/api/weight/restore', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('vital_diary_token')}`
+          },
+          body: JSON.stringify({ logs: weightsRestoreList })
+        });
+
+        // Restore Reports
+        await fetch('/api/reports/restore', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('vital_diary_token')}`
+          },
+          body: JSON.stringify({ logs: reportsRestoreList })
         });
 
         showToast('Health database restored successfully!', 'success');
@@ -351,6 +492,26 @@ export const Settings: React.FC<SettingsProps> = ({
 
       // Clear glucose
       await fetch('/api/glucose/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vital_diary_token')}`
+        },
+        body: JSON.stringify({ logs: [] })
+      });
+
+      // Clear weights
+      await fetch('/api/weight/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('vital_diary_token')}`
+        },
+        body: JSON.stringify({ logs: [] })
+      });
+
+      // Clear reports
+      await fetch('/api/reports/restore', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

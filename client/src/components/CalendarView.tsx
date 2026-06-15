@@ -1,14 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, CalendarCheck, Plus, Activity, Thermometer, Edit3, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarCheck, Plus, Activity, Thermometer, Edit3, Trash2, Weight, FileText } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
+import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
 
 interface CalendarViewProps {
   vitals: VitalsRecord[];
   glucose: GlucoseRecord[];
+  weights: WeightRecord[];
+  reports: ReportRecord[];
   allLogs: any[];
   onOpenLogModal: (log?: any, defaultDate?: Date) => void;
-  onDeleteLog: (id: string, type: 'vitals' | 'glucose') => void;
+  onDeleteLog: (id: string, type: 'vitals' | 'glucose' | 'weight' | 'reports') => void;
 }
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -16,6 +19,8 @@ const monthNames = ["January", "February", "March", "April", "May", "June", "Jul
 export const CalendarView: React.FC<CalendarViewProps> = ({
   vitals,
   glucose,
+  weights,
+  reports,
   allLogs,
   onOpenLogModal,
   onDeleteLog
@@ -78,12 +83,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     return d.toDateString() === selectedDate.toDateString();
   };
 
-  // Check if a date has BP or Glucose logs
+  // Check if a date has BP, Glucose, Weight or Report logs
   const getDateIndicators = (d: Date) => {
     const dateStr = d.toLocaleDateString();
     const hasBP = vitals.some(log => new Date(log.timestamp).toLocaleDateString() === dateStr);
     const hasGlucose = glucose.some(log => new Date(log.timestamp).toLocaleDateString() === dateStr);
-    return { hasBP, hasGlucose };
+    const hasWeight = weights.some(log => new Date(log.timestamp).toLocaleDateString() === dateStr);
+    const hasReport = reports.some(log => new Date(log.timestamp).toLocaleDateString() === dateStr);
+    return { hasBP, hasGlucose, hasWeight, hasReport };
   };
 
   return (
@@ -118,7 +125,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 return <div key={`empty-${idx}`} className="calendar-day empty-day" />;
               }
 
-              const { hasBP, hasGlucose } = getDateIndicators(cell.date);
+              const { hasBP, hasGlucose, hasWeight, hasReport } = getDateIndicators(cell.date);
               const activeClasses = [];
               if (isToday(cell.date)) activeClasses.push('today');
               if (isSelected(cell.date)) activeClasses.push('selected');
@@ -131,10 +138,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 >
                   <span className="day-number">{cell.day}</span>
                   
-                  {(hasBP || hasGlucose) && (
+                  {(hasBP || hasGlucose || hasWeight || hasReport) && (
                     <div className="day-indicators">
                       {hasBP && <span className="day-dot bp-dot" title="Vitals logged" />}
                       {hasGlucose && <span className="day-dot glucose-dot" title="Glucose logged" />}
+                      {hasWeight && <span className="day-dot weight-dot" style={{ backgroundColor: 'hsl(150, 80%, 40%)' }} title="Weight logged" />}
+                      {hasReport && <span className="day-dot report-dot" style={{ backgroundColor: 'hsl(30, 90%, 50%)' }} title="Report saved" />}
                     </div>
                   )}
                 </div>
@@ -162,9 +171,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 <p className="text-muted text-center py-4">No records logged on this date.</p>
               ) : (
                 selectedDateLogs.map(log => {
-                  const isVital = log.type === 'vitals' || 'systolic' in log;
+                  const logType = log.type;
                   
-                  if (isVital) {
+                  if (logType === 'vitals') {
                     const vitalLog = log as VitalsRecord;
                     const bpEval = evaluateBP(vitalLog.systolic, vitalLog.diastolic);
                     return (
@@ -210,7 +219,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                         </div>
                       </div>
                     );
-                  } else {
+                  } else if (logType === 'glucose') {
                     const glucoseLog = log as GlucoseRecord;
                     const glEval = evaluateGlucose(glucoseLog.value, glucoseLog.context);
                     return (
@@ -249,6 +258,93 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               className="btn-table-action delete-action btn-sm" 
                               title="Delete Entry"
                               onClick={() => onDeleteLog(log.id, 'glucose')}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (logType === 'weight') {
+                    const weightLog = log as WeightRecord;
+                    return (
+                      <div key={log.id} className="calendar-detail-card">
+                        <div className="calendar-detail-header">
+                          <span className="badge bg-green" style={{ backgroundColor: 'hsla(150, 80%, 40%, 0.15)', color: 'hsl(150, 80%, 40%)' }}>
+                            <Weight size={12} style={{ marginRight: '4px' }} /> Weight
+                          </span>
+                          <span className="calendar-detail-time">
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="calendar-detail-values">
+                          Weight: {weightLog.value} kg
+                        </div>
+                        {weightLog.notes && (
+                          <div className="text-sm text-muted mt-2 border-top pt-2 italic">
+                            Notes: "{weightLog.notes}"
+                          </div>
+                        )}
+                        <div className="d-flex justify-between align-center mt-2 border-top pt-2">
+                          <span className="text-xs text-muted">ID: {weightLog.id.substring(0, 8)}</span>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn-table-action edit-action btn-sm" 
+                              title="Edit Entry"
+                              onClick={() => onOpenLogModal(log)}
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button 
+                              className="btn-table-action delete-action btn-sm" 
+                              title="Delete Entry"
+                              onClick={() => onDeleteLog(log.id, 'weight')}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    const reportLog = log as ReportRecord;
+                    return (
+                      <div key={log.id} className="calendar-detail-card">
+                        <div className="calendar-detail-header">
+                          <span className="badge bg-orange" style={{ backgroundColor: 'hsla(30, 90%, 50%, 0.15)', color: 'hsl(30, 90%, 50%)' }}>
+                            <FileText size={12} style={{ marginRight: '4px' }} /> Report ({reportLog.report_type})
+                          </span>
+                          <span className="calendar-detail-time">
+                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="calendar-detail-values" style={{ fontWeight: 600 }}>
+                          {reportLog.title}
+                        </div>
+                        {reportLog.data && (
+                          <div className="text-sm text-secondary mt-1 font-monospace" style={{ whiteSpace: 'pre-wrap', padding: '0.25rem', background: 'rgba(0,0,0,0.05)', borderRadius: '4px' }}>
+                            {reportLog.data}
+                          </div>
+                        )}
+                        {reportLog.notes && (
+                          <div className="text-sm text-muted mt-2 border-top pt-2 italic">
+                            Notes: "{reportLog.notes}"
+                          </div>
+                        )}
+                        <div className="d-flex justify-between align-center mt-2 border-top pt-2">
+                          <span className="text-xs text-muted">ID: {reportLog.id.substring(0, 8)}</span>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn-table-action edit-action btn-sm" 
+                              title="Edit Entry"
+                              onClick={() => onOpenLogModal(log)}
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button 
+                              className="btn-table-action delete-action btn-sm" 
+                              title="Delete Entry"
+                              onClick={() => onDeleteLog(log.id, 'reports')}
                             >
                               <Trash2 size={14} />
                             </button>

@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initDatabase } = require('./database');
+const { initDatabase, getDbReady } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -16,6 +16,21 @@ app.use(cors({
 
 app.use(express.json());
 
+// Database readiness check middleware to handle cold starts cleanly
+app.use((req, res, next) => {
+  if (req.path === '/api/db-status') {
+    return res.json({ ready: getDbReady() });
+  }
+  
+  if (req.path.startsWith('/api/') && !getDbReady()) {
+    return res.status(503).json({
+      status: 'waking_up',
+      error: 'Database is warming up. This usually takes 10-25 seconds on a cold start. Please wait...'
+    });
+  }
+  next();
+});
+
 // Initialize Database Table Structures
 initDatabase();
 
@@ -23,6 +38,8 @@ initDatabase();
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/vitals', require('./routes/vitals'));
 app.use('/api/glucose', require('./routes/glucose'));
+app.use('/api/weight', require('./routes/weight'));
+app.use('/api/reports', require('./routes/reports'));
 
 // Serve Frontend Static Build Assets in Production
 const clientBuildPath = path.join(__dirname, 'client', 'dist');
