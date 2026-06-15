@@ -1,41 +1,103 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, LineChart as ChartIcon } from 'lucide-react';
+import { Calculator, LineChart as ChartIcon, FlaskConical } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
-import type { WeightRecord } from '../utils/api';
+import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel } from '../utils/evaluators';
 import { Line } from 'react-chartjs-2';
+
+// ─── Report Parameter Parser ────────────────────────────────────────────────
+// Extracts named numeric parameters from free-text report data.
+// Supports formats like:
+//   "Hb: 14.5 g/dL", "WBC=8.2", "Glucose 95 mg/dL", "Creatinine : 1.1"
+export function parseReportParameters(text: string): Record<string, number> {
+  const result: Record<string, number> = {};
+  if (!text) return result;
+
+  // Pattern: word(s) optional-colon/equals numeric-value optional-unit
+  const regex = /([A-Za-z][A-Za-z0-9\s\-/()]{0,40?}?)\s*[:\-=]\s*([0-9]+(?:\.[0-9]+)?)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    const key = match[1].trim().replace(/\s+/g, ' ');
+    const val = parseFloat(match[2]);
+    if (key && !isNaN(val)) {
+      result[key] = val;
+    }
+  }
+  return result;
+}
+
+// Collect all unique parameter names across a list of reports
+function collectParameters(reports: ReportRecord[]): string[] {
+  const paramSet = new Set<string>();
+  for (const r of reports) {
+    const parsed = parseReportParameters(r.data);
+    Object.keys(parsed).forEach(k => paramSet.add(k));
+  }
+  return Array.from(paramSet).sort();
+}
+
+// Palette for multi-parameter lines
+const PARAM_COLORS = [
+  'hsl(200, 85%, 55%)',
+  'hsl(355, 78%, 56%)',
+  'hsl(150, 80%, 40%)',
+  'hsl(35, 90%, 55%)',
+  'hsl(280, 80%, 60%)',
+  'hsl(30, 100%, 50%)',
+  'hsl(170, 60%, 45%)',
+  'hsl(310, 70%, 55%)',
+];
+
+// ─── Component ──────────────────────────────────────────────────────────────
 
 interface AnalyticsProps {
   vitals: VitalsRecord[];
   glucose: GlucoseRecord[];
   weights: WeightRecord[];
+  reports: ReportRecord[];
 }
 
-export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }) => {
-  const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight'>('bp');
+export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, reports }) => {
+  const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight' | 'reports'>('bp');
   const [timeframe, setTimeframe] = useState<'7days' | '30days' | 'year' | 'all'>('30days');
+  const [selectedParam, setSelectedParam] = useState<string>('');
 
   // 1. Filter logs by metric and timeframe
   const filteredLogs = useMemo(() => {
     const now = new Date();
-    const sourceLogs = (metric === 'glucose') ? glucose : (metric === 'weight' ? weights : vitals);
+    let sourceLogs: any[];
+    if (metric === 'glucose') sourceLogs = glucose;
+    else if (metric === 'weight') sourceLogs = weights;
+    else if (metric === 'reports') sourceLogs = reports;
+    else sourceLogs = vitals;
 
-    let filtered = sourceLogs.filter(log => {
+    const filtered = sourceLogs.filter(log => {
       const logDate = new Date(log.timestamp);
-      const diffTime = Math.abs(now.getTime() - logDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
+      const diffDays = Math.ceil(Math.abs(now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
       if (timeframe === '7days') return diffDays <= 7;
       if (timeframe === '30days') return diffDays <= 30;
       if (timeframe === 'year') return diffDays <= 365;
       return true;
     });
 
-    // Chronological order for chart display
-    return [...filtered].reverse();
-  }, [metric, timeframe, vitals, glucose, weights]);
+    return [...filtered].reverse(); // chronological order
+  }, [metric, timeframe, vitals, glucose, weights, reports]);
 
-  // 2. Calculate Stats based on filtered logs
+  // 2. Collect available parameters when in report mode
+  const availableParams = useMemo(() => {
+    if (metric !== 'reports') return [];
+    return collectParameters(filteredLogs as ReportRecord[]);
+  }, [metric, filteredLogs]);
+
+  // Auto-select first param when params change
+  const resolvedParam = useMemo(() => {
+    if (metric !== 'reports') return '';
+    if (availableParams.includes(selectedParam)) return selectedParam;
+    return availableParams[0] ?? '';
+  }, [metric, availableParams, selectedParam]);
+
+  // 3. Calculate Stats based on filtered logs
   const stats = useMemo(() => {
     const results = {
       avg: '--',
@@ -46,7 +108,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
       critical: 0,
       glucoseFastingAvg: '--',
       glucosePreAvg: '--',
-      glucosePostAvg: '--'
+      glucosePostAvg: '--',
     };
 
     if (filteredLogs.length === 0) return results;
@@ -57,267 +119,221 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
 
     if (metric === 'bp') {
       const bpLogs = filteredLogs as VitalsRecord[];
-      const sysSum = bpLogs.reduce((a, b) => a + b.systolic, 0);
-      const diaSum = bpLogs.reduce((a, b) => a + b.diastolic, 0);
-      results.avg = `${Math.round(sysSum / bpLogs.length)}/${Math.round(diaSum / bpLogs.length)} mmHg`;
-
+      results.avg = `${Math.round(bpLogs.reduce((a, b) => a + b.systolic, 0) / bpLogs.length)}/${Math.round(bpLogs.reduce((a, b) => a + b.diastolic, 0) / bpLogs.length)} mmHg`;
       const sortedSys = [...bpLogs].sort((a, b) => b.systolic - a.systolic);
-      const highest = sortedSys[0];
       const sortedDia = [...bpLogs].sort((a, b) => a.diastolic - b.diastolic);
-
-      results.highest = `${highest.systolic}/${highest.diastolic}`;
+      results.highest = `${sortedSys[0].systolic}/${sortedSys[0].diastolic}`;
       results.lowest = `${sortedDia[0].systolic}/${sortedDia[0].diastolic}`;
-
       bpLogs.forEach(log => {
-        const evalRes = evaluateBP(log.systolic, log.diastolic);
-        if (evalRes.className === 'status-normal') normalCount++;
-        else if (evalRes.className === 'status-elevated') warningCount++;
+        const e = evaluateBP(log.systolic, log.diastolic);
+        if (e.className === 'status-normal') normalCount++;
+        else if (e.className === 'status-elevated') warningCount++;
         else criticalCount++;
       });
 
     } else if (metric === 'hr') {
       const hrLogs = filteredLogs as VitalsRecord[];
-      const hrSum = hrLogs.reduce((a, b) => a + b.hr, 0);
-      results.avg = `${Math.round(hrSum / hrLogs.length)} bpm`;
-
-      const sortedHr = [...hrLogs].sort((a, b) => b.hr - a.hr);
-      results.highest = `${sortedHr[0].hr} bpm`;
-      results.lowest = `${sortedHr[sortedHr.length - 1].hr} bpm`;
-
+      results.avg = `${Math.round(hrLogs.reduce((a, b) => a + b.hr, 0) / hrLogs.length)} bpm`;
+      const sorted = [...hrLogs].sort((a, b) => b.hr - a.hr);
+      results.highest = `${sorted[0].hr} bpm`;
+      results.lowest = `${sorted[sorted.length - 1].hr} bpm`;
       hrLogs.forEach(log => {
-        const evalRes = evaluateHR(log.hr);
-        if (evalRes.className === 'status-normal') normalCount++;
-        else if (evalRes.className === 'status-elevated' || evalRes.className === 'status-low') warningCount++;
+        const e = evaluateHR(log.hr);
+        if (e.className === 'status-normal') normalCount++;
+        else if (e.className === 'status-elevated' || e.className === 'status-low') warningCount++;
         else criticalCount++;
       });
 
     } else if (metric === 'spo2') {
       const spo2Logs = (filteredLogs as VitalsRecord[]).filter(l => l.spo2 !== null);
       if (spo2Logs.length > 0) {
-        const spo2Sum = spo2Logs.reduce((a, b) => a + (b.spo2 || 0), 0);
-        results.avg = `${Math.round(spo2Sum / spo2Logs.length)}%`;
-
-        const sortedSpo2 = [...spo2Logs].sort((a, b) => (b.spo2 || 0) - (a.spo2 || 0));
-        results.highest = `${sortedSpo2[0].spo2}%`;
-        results.lowest = `${sortedSpo2[sortedSpo2.length - 1].spo2}%`;
-
+        results.avg = `${Math.round(spo2Logs.reduce((a, b) => a + (b.spo2 || 0), 0) / spo2Logs.length)}%`;
+        const sorted = [...spo2Logs].sort((a, b) => (b.spo2 || 0) - (a.spo2 || 0));
+        results.highest = `${sorted[0].spo2}%`;
+        results.lowest = `${sorted[sorted.length - 1].spo2}%`;
         spo2Logs.forEach(log => {
-          const evalRes = evaluateSpO2(log.spo2);
-          if (evalRes.className === 'status-normal') normalCount++;
-          else if (evalRes.className === 'status-elevated') warningCount++;
+          const e = evaluateSpO2(log.spo2);
+          if (e.className === 'status-normal') normalCount++;
+          else if (e.className === 'status-elevated') warningCount++;
           else criticalCount++;
         });
       }
 
     } else if (metric === 'glucose') {
       const glLogs = filteredLogs as GlucoseRecord[];
-      const glSum = glLogs.reduce((a, b) => a + b.value, 0);
-      results.avg = `${Math.round(glSum / glLogs.length)} mg/dL`;
-
-      const sortedGl = [...glLogs].sort((a, b) => b.value - a.value);
-      results.highest = `${sortedGl[0].value} mg/dL`;
-      results.lowest = `${sortedGl[sortedGl.length - 1].value} mg/dL`;
-
-      const fasting = glLogs.filter(l => l.context === 'fasting');
-      const preMeal = glLogs.filter(l => l.context === 'pre-meal');
-      const postMeal = glLogs.filter(l => l.context === 'post-meal');
-
-      const calcAvgText = (arr: GlucoseRecord[]) => {
-        if (arr.length === 0) return '--';
-        const sum = arr.reduce((a, b) => a + b.value, 0);
-        return `${Math.round(sum / arr.length)} mg/dL`;
-      };
-
-      results.glucoseFastingAvg = calcAvgText(fasting);
-      results.glucosePreAvg = calcAvgText(preMeal);
-      results.glucosePostAvg = calcAvgText(postMeal);
-
+      results.avg = `${Math.round(glLogs.reduce((a, b) => a + b.value, 0) / glLogs.length)} mg/dL`;
+      const sorted = [...glLogs].sort((a, b) => b.value - a.value);
+      results.highest = `${sorted[0].value} mg/dL`;
+      results.lowest = `${sorted[sorted.length - 1].value} mg/dL`;
+      const calcAvg = (arr: GlucoseRecord[]) => arr.length ? `${Math.round(arr.reduce((a, b) => a + b.value, 0) / arr.length)} mg/dL` : '--';
+      results.glucoseFastingAvg = calcAvg(glLogs.filter(l => l.context === 'fasting'));
+      results.glucosePreAvg = calcAvg(glLogs.filter(l => l.context === 'pre-meal'));
+      results.glucosePostAvg = calcAvg(glLogs.filter(l => l.context === 'post-meal'));
       glLogs.forEach(log => {
-        const evalRes = evaluateGlucose(log.value, log.context);
-        if (evalRes.className === 'status-normal') normalCount++;
-        else if (evalRes.className === 'status-elevated') warningCount++;
+        const e = evaluateGlucose(log.value, log.context);
+        if (e.className === 'status-normal') normalCount++;
+        else if (e.className === 'status-elevated') warningCount++;
         else criticalCount++;
       });
+
     } else if (metric === 'weight') {
       const wtLogs = filteredLogs as WeightRecord[];
-      const wtSum = wtLogs.reduce((a, b) => a + b.value, 0);
-      results.avg = wtLogs.length > 0 ? `${(wtSum / wtLogs.length).toFixed(1)} kg` : '--';
+      const sum = wtLogs.reduce((a, b) => a + b.value, 0);
+      results.avg = `${(sum / wtLogs.length).toFixed(1)} kg`;
+      const sorted = [...wtLogs].sort((a, b) => b.value - a.value);
+      results.highest = `${sorted[0].value} kg`;
+      results.lowest = `${sorted[sorted.length - 1].value} kg`;
+      normalCount = wtLogs.length;
 
-      if (wtLogs.length > 0) {
-        const sortedWt = [...wtLogs].sort((a, b) => b.value - a.value);
-        results.highest = `${sortedWt[0].value} kg`;
-        results.lowest = `${sortedWt[sortedWt.length - 1].value} kg`;
+    } else if (metric === 'reports') {
+      const repLogs = filteredLogs as ReportRecord[];
+      if (resolvedParam) {
+        const values: number[] = [];
+        repLogs.forEach(r => {
+          const parsed = parseReportParameters(r.data);
+          if (resolvedParam in parsed) values.push(parsed[resolvedParam]);
+        });
+        if (values.length > 0) {
+          results.avg = `${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)}`;
+          results.highest = `${Math.max(...values).toFixed(2)}`;
+          results.lowest = `${Math.min(...values).toFixed(2)}`;
+          normalCount = values.length;
+        }
+      } else {
+        results.avg = `${repLogs.length} reports`;
+        normalCount = repLogs.length;
       }
-
-      wtLogs.forEach(() => {
-        normalCount++;
-      });
     }
 
     results.normal = normalCount;
     results.warning = warningCount;
     results.critical = criticalCount;
-
     return results;
-  }, [filteredLogs, metric]);
+  }, [filteredLogs, metric, resolvedParam]);
 
-  // 3. Prepare Chart Data & Options
+  // 4. Prepare Chart Data & Options
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
   const textColor = isDark ? '#b2ccd6' : '#546e7a';
 
   const chartData = useMemo(() => {
     const labels = filteredLogs.map(l => formatDateLabel(l.timestamp));
-    
+
     if (metric === 'bp') {
       const bpLogs = filteredLogs as VitalsRecord[];
       return {
         labels,
         datasets: [
-          {
-            label: 'Systolic (BP High)',
-            data: bpLogs.map(l => l.systolic),
-            borderColor: 'hsl(355, 78%, 56%)',
-            backgroundColor: 'hsla(355, 78%, 56%, 0.1)',
-            borderWidth: 3,
-            tension: 0.25,
-            fill: true,
-            pointBackgroundColor: 'hsl(355, 78%, 56%)'
-          },
-          {
-            label: 'Diastolic (BP Low)',
-            data: bpLogs.map(l => l.diastolic),
-            borderColor: 'hsl(200, 85%, 55%)',
-            backgroundColor: 'hsla(200, 85%, 55%, 0.05)',
-            borderWidth: 3,
-            tension: 0.25,
-            fill: true,
-            pointBackgroundColor: 'hsl(200, 85%, 55%)'
-          }
-        ]
+          { label: 'Systolic (BP High)', data: bpLogs.map(l => l.systolic), borderColor: 'hsl(355, 78%, 56%)', backgroundColor: 'hsla(355, 78%, 56%, 0.1)', borderWidth: 3, tension: 0.25, fill: true, pointBackgroundColor: 'hsl(355, 78%, 56%)' },
+          { label: 'Diastolic (BP Low)', data: bpLogs.map(l => l.diastolic), borderColor: 'hsl(200, 85%, 55%)', backgroundColor: 'hsla(200, 85%, 55%, 0.05)', borderWidth: 3, tension: 0.25, fill: true, pointBackgroundColor: 'hsl(200, 85%, 55%)' },
+        ],
       };
     } else if (metric === 'hr') {
-      const hrLogs = filteredLogs as VitalsRecord[];
-      return {
-        labels,
-        datasets: [
-          {
-            label: 'Heart Rate (bpm)',
-            data: hrLogs.map(l => l.hr),
-            borderColor: 'hsl(330, 80%, 60%)',
-            backgroundColor: 'hsla(330, 80%, 60%, 0.15)',
-            borderWidth: 3,
-            tension: 0.3,
-            fill: true,
-            pointBackgroundColor: 'hsl(330, 80%, 60%)'
-          }
-        ]
-      };
+      return { labels, datasets: [{ label: 'Heart Rate (bpm)', data: (filteredLogs as VitalsRecord[]).map(l => l.hr), borderColor: 'hsl(330, 80%, 60%)', backgroundColor: 'hsla(330, 80%, 60%, 0.15)', borderWidth: 3, tension: 0.3, fill: true, pointBackgroundColor: 'hsl(330, 80%, 60%)' }] };
     } else if (metric === 'spo2') {
-      const spo2Logs = filteredLogs as VitalsRecord[];
-      return {
-        labels,
-        datasets: [
-          {
-            label: 'Oxygen Saturation (SpO₂ %)',
-            data: spo2Logs.map(l => l.spo2),
-            borderColor: 'hsl(200, 85%, 55%)',
-            backgroundColor: 'hsla(200, 85%, 55%, 0.15)',
-            borderWidth: 3,
-            tension: 0.2,
-            fill: true,
-            pointBackgroundColor: 'hsl(200, 85%, 55%)'
-          }
-        ]
-      };
+      return { labels, datasets: [{ label: 'SpO₂ (%)', data: (filteredLogs as VitalsRecord[]).map(l => l.spo2), borderColor: 'hsl(200, 85%, 55%)', backgroundColor: 'hsla(200, 85%, 55%, 0.15)', borderWidth: 3, tension: 0.2, fill: true, pointBackgroundColor: 'hsl(200, 85%, 55%)' }] };
     } else if (metric === 'weight') {
-      const wtLogs = filteredLogs as WeightRecord[];
+      return { labels, datasets: [{ label: 'Body Weight (kg)', data: (filteredLogs as WeightRecord[]).map(l => l.value), borderColor: 'hsl(150, 80%, 40%)', backgroundColor: 'hsla(150, 80%, 40%, 0.15)', borderWidth: 3, tension: 0.2, fill: true, pointBackgroundColor: 'hsl(150, 80%, 40%)' }] };
+    } else if (metric === 'reports' && resolvedParam) {
+      // Build a dataset for the selected parameter across all matching reports
+      const repLogs = filteredLogs as ReportRecord[];
+      const dataPoints: { label: string; value: number }[] = [];
+      repLogs.forEach(r => {
+        const parsed = parseReportParameters(r.data);
+        if (resolvedParam in parsed) {
+          dataPoints.push({ label: formatDateLabel(r.timestamp), value: parsed[resolvedParam] });
+        }
+      });
       return {
-        labels,
+        labels: dataPoints.map(d => d.label),
         datasets: [
           {
-            label: 'Body Weight (kg)',
-            data: wtLogs.map(l => l.value),
-            borderColor: 'hsl(150, 80%, 40%)',
-            backgroundColor: 'hsla(150, 80%, 40%, 0.15)',
+            label: resolvedParam,
+            data: dataPoints.map(d => d.value),
+            borderColor: PARAM_COLORS[0],
+            backgroundColor: PARAM_COLORS[0].replace('hsl', 'hsla').replace(')', ', 0.15)'),
             borderWidth: 3,
-            tension: 0.2,
+            tension: 0.25,
             fill: true,
-            pointBackgroundColor: 'hsl(150, 80%, 40%)'
-          }
-        ]
+            pointBackgroundColor: PARAM_COLORS[0],
+            pointHoverRadius: 7,
+          },
+        ],
       };
     } else {
-      // Glucose: return empty, handled by separate useMemo
       return { labels: [], datasets: [] };
     }
-  }, [filteredLogs, metric]);
+  }, [filteredLogs, metric, resolvedParam]);
 
   const glucoseCharts = useMemo(() => {
     if (metric !== 'glucose') return null;
     const glLogs = filteredLogs as GlucoseRecord[];
-
     const buildContextChart = (context: string, label: string, color: string, bgColor: string) => {
       const contextLogs = glLogs.filter(l => l.context === context);
       return {
         logs: contextLogs,
-        data: {
-          labels: contextLogs.map(l => formatDateLabel(l.timestamp)),
-          datasets: [
-            {
-              label,
-              data: contextLogs.map(l => l.value),
-              borderColor: color,
-              backgroundColor: bgColor,
-              borderWidth: 3,
-              tension: 0.3,
-              fill: true,
-              pointBackgroundColor: color,
-              pointHoverRadius: 7
-            }
-          ]
-        }
+        data: { labels: contextLogs.map(l => formatDateLabel(l.timestamp)), datasets: [{ label, data: contextLogs.map(l => l.value), borderColor: color, backgroundColor: bgColor, borderWidth: 3, tension: 0.3, fill: true, pointBackgroundColor: color, pointHoverRadius: 7 }] },
       };
     };
-
     return {
       fasting: buildContextChart('fasting', 'Fasting Glucose (mg/dL)', 'hsl(150, 80%, 40%)', 'hsla(150, 80%, 40%, 0.1)'),
       preMeal: buildContextChart('pre-meal', 'Pre-Meal Glucose (mg/dL)', 'hsl(35, 90%, 55%)', 'hsla(35, 90%, 55%, 0.1)'),
-      postMeal: buildContextChart('post-meal', 'Post-Meal Glucose (mg/dL)', 'hsl(280, 80%, 60%)', 'hsla(280, 80%, 60%, 0.1)')
+      postMeal: buildContextChart('post-meal', 'Post-Meal Glucose (mg/dL)', 'hsl(280, 80%, 60%)', 'hsla(280, 80%, 60%, 0.1)'),
     };
   }, [filteredLogs, metric]);
+
+  // All parameters trend chart – shows multiple params at once for overview
+  const allParamsChartData = useMemo(() => {
+    if (metric !== 'reports' || availableParams.length === 0) return null;
+    const repLogs = filteredLogs as ReportRecord[];
+    const labels = repLogs.map(r => formatDateLabel(r.timestamp));
+
+    const datasets = availableParams.slice(0, 8).map((param, i) => {
+      const color = PARAM_COLORS[i % PARAM_COLORS.length];
+      return {
+        label: param,
+        data: repLogs.map(r => {
+          const parsed = parseReportParameters(r.data);
+          return param in parsed ? parsed[param] : null;
+        }),
+        borderColor: color,
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        tension: 0.2,
+        fill: false,
+        pointBackgroundColor: color,
+        spanGaps: true,
+      };
+    });
+
+    return { labels, datasets };
+  }, [metric, filteredLogs, availableParams]);
 
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: {
-        labels: { color: textColor, font: { family: 'Outfit' } }
-      },
-      tooltip: {
-        titleFont: { family: 'Outfit' },
-        bodyFont: { family: 'Outfit' }
-      }
+      legend: { labels: { color: textColor, font: { family: 'Outfit' } } },
+      tooltip: { titleFont: { family: 'Outfit' }, bodyFont: { family: 'Outfit' } },
     },
     scales: {
-      x: {
-        grid: { color: gridColor },
-        ticks: { color: textColor, font: { family: 'Outfit' } }
-      },
-      y: {
-        grid: { color: gridColor },
-        ticks: { color: textColor, font: { family: 'Outfit' } }
-      }
-    }
+      x: { grid: { color: gridColor }, ticks: { color: textColor, font: { family: 'Outfit' } } },
+      y: { grid: { color: gridColor }, ticks: { color: textColor, font: { family: 'Outfit' } } },
+    },
   };
 
-  const titles = {
-    bp: "Blood Pressure Trends",
-    hr: "Heart Rate (BPM) Log",
-    spo2: "Oxygen Saturation (SpO₂) History",
-    glucose: "Blood Glucose levels",
-    weight: "Weight Tracker History"
+  const titles: Record<typeof metric, string> = {
+    bp: 'Blood Pressure Trends',
+    hr: 'Heart Rate (BPM) Log',
+    spo2: 'Oxygen Saturation (SpO₂) History',
+    glucose: 'Blood Glucose Levels',
+    weight: 'Weight Tracker History',
+    reports: 'Medical Report Parameter Trends',
   };
+
+  const showSingleChart = metric !== 'glucose' && metric !== 'reports';
+  const showGlucoseCharts = metric === 'glucose';
+  const showReportCharts = metric === 'reports';
 
   return (
     <section id="analytics-view" className="view-section active">
@@ -325,23 +341,25 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
         <div className="filters-row">
           <div className="filter-group">
             <label htmlFor="analytics-metric-select">Select Metric</label>
-            <select 
-              id="analytics-metric-select" 
+            <select
+              id="analytics-metric-select"
               className="form-control"
               value={metric}
-              onChange={(e) => setMetric(e.target.value as any)}
+              onChange={(e) => { setMetric(e.target.value as any); setSelectedParam(''); }}
             >
               <option value="bp">Blood Pressure</option>
               <option value="hr">Heart Rate</option>
               <option value="spo2">Blood Oxygen (SpO₂)</option>
               <option value="glucose">Blood Glucose</option>
               <option value="weight">Body Weight</option>
+              <option value="reports">Medical Reports</option>
             </select>
           </div>
+
           <div className="filter-group">
             <label htmlFor="analytics-timeframe-select">Time Range</label>
-            <select 
-              id="analytics-timeframe-select" 
+            <select
+              id="analytics-timeframe-select"
               className="form-control"
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value as any)}
@@ -352,6 +370,22 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
               <option value="all">All-Time</option>
             </select>
           </div>
+
+          {showReportCharts && availableParams.length > 0 && (
+            <div className="filter-group">
+              <label htmlFor="analytics-param-select">Parameter</label>
+              <select
+                id="analytics-param-select"
+                className="form-control"
+                value={resolvedParam}
+                onChange={(e) => setSelectedParam(e.target.value)}
+              >
+                {availableParams.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -360,12 +394,14 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
         <div className="panel panel-glass trends-panel">
           <div className="panel-header">
             <div className="panel-title-group">
-              <ChartIcon className="color-primary" size={22} />
+              {showReportCharts
+                ? <FlaskConical className="color-primary" size={22} />
+                : <ChartIcon className="color-primary" size={22} />}
               <h3>{titles[metric]}</h3>
             </div>
           </div>
 
-          {metric !== 'glucose' ? (
+          {showSingleChart && (
             <div className="chart-container-large">
               {filteredLogs.length > 0 ? (
                 <Line data={chartData} options={chartOptions} />
@@ -375,49 +411,95 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
                 </div>
               )}
             </div>
-          ) : (
+          )}
+
+          {showGlucoseCharts && (
             <div className="glucose-charts-stack">
-              {/* Fasting Chart */}
-              <div className="glucose-chart-section">
-                <h4 className="glucose-chart-label color-success">🟢 Fasting</h4>
-                <div className="chart-container">
-                  {glucoseCharts && glucoseCharts.fasting.logs.length > 0 ? (
-                    <Line data={glucoseCharts.fasting.data} options={chartOptions} />
-                  ) : (
-                    <div className="d-flex align-center justify-center h-100 text-muted text-sm">
-                      No fasting glucose readings in this range.
+              {(['fasting', 'preMeal', 'postMeal'] as const).map((ctx, i) => {
+                const labels = ['🟢 Fasting', '🟠 Pre-Meal', '🟣 Post-Meal'];
+                const colorClasses = ['color-success', 'color-warning', 'color-purple'];
+                const emptyMsg = ['No fasting glucose readings in this range.', 'No pre-meal glucose readings in this range.', 'No post-meal glucose readings in this range.'];
+                return (
+                  <div key={ctx} className="glucose-chart-section">
+                    <h4 className={`glucose-chart-label ${colorClasses[i]}`}>{labels[i]}</h4>
+                    <div className="chart-container">
+                      {glucoseCharts && glucoseCharts[ctx].logs.length > 0 ? (
+                        <Line data={glucoseCharts[ctx].data} options={chartOptions} />
+                      ) : (
+                        <div className="d-flex align-center justify-center h-100 text-muted text-sm">{emptyMsg[i]}</div>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-              {/* Pre-Meal Chart */}
-              <div className="glucose-chart-section">
-                <h4 className="glucose-chart-label color-warning">🟠 Pre-Meal</h4>
-                <div className="chart-container">
-                  {glucoseCharts && glucoseCharts.preMeal.logs.length > 0 ? (
-                    <Line data={glucoseCharts.preMeal.data} options={chartOptions} />
-                  ) : (
-                    <div className="d-flex align-center justify-center h-100 text-muted text-sm">
-                      No pre-meal glucose readings in this range.
+          {showReportCharts && (
+            <div className="report-charts-stack">
+              {filteredLogs.length === 0 ? (
+                <div className="d-flex align-center justify-center h-100 text-muted">
+                  No reports in this time range. Add medical reports to view parameter trends.
+                </div>
+              ) : availableParams.length === 0 ? (
+                <div className="d-flex align-center justify-center h-100 text-muted">
+                  No numeric parameters found in report data.<br />
+                  Enter data like "Hb: 14.5", "WBC: 8.2", "Glucose: 95" in your reports.
+                </div>
+              ) : (
+                <>
+                  {/* Single selected-parameter trend chart */}
+                  {resolvedParam && (
+                    <div className="glucose-chart-section">
+                      <h4 className="glucose-chart-label color-primary">📈 {resolvedParam} — Trend Over Time</h4>
+                      <div className="chart-container-large">
+                        <Line data={chartData} options={chartOptions} />
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Post-Meal Chart */}
-              <div className="glucose-chart-section">
-                <h4 className="glucose-chart-label color-purple">🟣 Post-Meal</h4>
-                <div className="chart-container">
-                  {glucoseCharts && glucoseCharts.postMeal.logs.length > 0 ? (
-                    <Line data={glucoseCharts.postMeal.data} options={chartOptions} />
-                  ) : (
-                    <div className="d-flex align-center justify-center h-100 text-muted text-sm">
-                      No post-meal glucose readings in this range.
+                  {/* Overview of all parameters */}
+                  {availableParams.length > 1 && allParamsChartData && (
+                    <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
+                      <h4 className="glucose-chart-label color-rose">🔬 All Parameters Overview</h4>
+                      <div className="chart-container">
+                        <Line data={allParamsChartData} options={chartOptions} />
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
+
+                  {/* Parameter index table */}
+                  <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
+                    <h4 className="glucose-chart-label" style={{ color: textColor }}>📋 Detected Parameters</h4>
+                    <div className="report-params-grid">
+                      {availableParams.map((param, i) => {
+                        const repLogs = filteredLogs as ReportRecord[];
+                        const values: number[] = [];
+                        repLogs.forEach(r => {
+                          const parsed = parseReportParameters(r.data);
+                          if (param in parsed) values.push(parsed[param]);
+                        });
+                        const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2) : '--';
+                        const last = values.length ? values[values.length - 1].toFixed(2) : '--';
+                        return (
+                          <button
+                            key={param}
+                            className={`report-param-chip ${resolvedParam === param ? 'active' : ''}`}
+                            onClick={() => setSelectedParam(param)}
+                            style={{ borderLeftColor: PARAM_COLORS[i % PARAM_COLORS.length] }}
+                          >
+                            <span className="param-chip-name">{param}</span>
+                            <span className="param-chip-stats">
+                              <span>Avg: <strong>{avg}</strong></span>
+                              <span>Last: <strong>{last}</strong></span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -430,18 +512,18 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
               <h3>Reading Statistics</h3>
             </div>
           </div>
-          
+
           <div className="stats-details">
             <div className="stats-subgroup">
               <h4 className="stats-subgroup-title">Averages</h4>
               <div className="summary-list">
                 <div className="summary-item">
                   <div className="summary-label">
-                    {metric === 'glucose' ? 'Overall Average' : 'Average Value'}
+                    {metric === 'glucose' ? 'Overall Average' : metric === 'reports' ? (resolvedParam ? `Avg ${resolvedParam}` : 'Total Reports') : 'Average Value'}
                   </div>
                   <div className="summary-value">{stats.avg}</div>
                 </div>
-                
+
                 {metric === 'glucose' && (
                   <>
                     <div className="summary-item">
@@ -476,20 +558,43 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights }
             </div>
 
             <div className="stats-subgroup mt-3">
-              <h4 className="stats-subgroup-title">Health Distribution</h4>
+              <h4 className="stats-subgroup-title">
+                {metric === 'reports' ? 'Report Count' : 'Health Distribution'}
+              </h4>
               <div className="summary-list">
-                <div className="summary-item">
-                  <div className="summary-label">Normal Readings</div>
-                  <div className="summary-value color-success">{stats.normal}</div>
-                </div>
-                <div className="summary-item">
-                  <div className="summary-label">Elevated/Warning</div>
-                  <div className="summary-value color-warning">{stats.warning}</div>
-                </div>
-                <div className="summary-item">
-                  <div className="summary-label">High / Critical</div>
-                  <div className="summary-value color-danger">{stats.critical}</div>
-                </div>
+                {metric === 'reports' ? (
+                  <>
+                    <div className="summary-item">
+                      <div className="summary-label">Total Reports</div>
+                      <div className="summary-value color-primary">{filteredLogs.length}</div>
+                    </div>
+                    <div className="summary-item">
+                      <div className="summary-label">Parameters Detected</div>
+                      <div className="summary-value color-success">{availableParams.length}</div>
+                    </div>
+                    {resolvedParam && (
+                      <div className="summary-item">
+                        <div className="summary-label">Data Points for "{resolvedParam}"</div>
+                        <div className="summary-value">{stats.normal}</div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="summary-item">
+                      <div className="summary-label">Normal Readings</div>
+                      <div className="summary-value color-success">{stats.normal}</div>
+                    </div>
+                    <div className="summary-item">
+                      <div className="summary-label">Elevated/Warning</div>
+                      <div className="summary-value color-warning">{stats.warning}</div>
+                    </div>
+                    <div className="summary-item">
+                      <div className="summary-label">High / Critical</div>
+                      <div className="summary-value color-danger">{stats.critical}</div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

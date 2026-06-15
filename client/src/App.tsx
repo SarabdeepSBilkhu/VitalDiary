@@ -255,7 +255,7 @@ export const App: React.FC = () => {
           />
         );
       case 'analytics-view':
-        return <Analytics vitals={vitals} glucose={glucose} weights={weights} />;
+        return <Analytics vitals={vitals} glucose={glucose} weights={weights} reports={reports} />;
       case 'calendar-view':
         return (
           <CalendarView 
