@@ -9,15 +9,19 @@ import { Line } from 'react-chartjs-2';
 // Extracts named numeric parameters from free-text report data.
 // Supports formats like:
 //   "Hb: 14.5 g/dL", "WBC=8.2", "Glucose 95 mg/dL", "Creatinine : 1.1"
+//   Also handles quoted entries: "RBC: 3.86", "Haemoglobin: 9.8"
 export function parseReportParameters(text: string): Record<string, number> {
   const result: Record<string, number> = {};
   if (!text) return result;
 
-  // Pattern: word(s) optional-colon/equals numeric-value optional-unit
-  const regex = /([A-Za-z][A-Za-z0-9\s\-/()]{0,40?}?)\s*[:\-=]\s*([0-9]+(?:\.[0-9]+)?)/g;
+  // Strip surrounding quote characters so entries like "Key: Value" are parsed correctly
+  const cleaned = text.replace(/['"]/g, '');
+
+  // Pattern: word(s) + optional colon/equals + numeric value (unit ignored)
+  const regex = /([A-Za-z][A-Za-z0-9\s\-/()]{0,40}?)\s*[:\-=]\s*([0-9]+(?:\.[0-9]+)?)/g;
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(text)) !== null) {
+  while ((match = regex.exec(cleaned)) !== null) {
     const key = match[1].trim().replace(/\s+/g, ' ');
     const val = parseFloat(match[2]);
     if (key && !isNaN(val)) {
