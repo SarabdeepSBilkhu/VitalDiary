@@ -177,7 +177,7 @@ export const Settings: React.FC<SettingsProps> = ({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(50, 50, 50);
-    doc.text("REPORT SUMMARY & STATISTICAL AVERAGES (LAST 30 DAYS)", 18, y + 8);
+    doc.text("REPORT SUMMARY & STATISTICAL AVERAGES (ALL RECORDS)", 18, y + 8);
     const totalV = vitals.length;
     const avgSys = totalV ? Math.round(vitals.reduce((a, b) => a + b.systolic, 0) / totalV) : 0;
     const avgDia = totalV ? Math.round(vitals.reduce((a, b) => a + b.diastolic, 0) / totalV) : 0;
@@ -192,9 +192,24 @@ export const Settings: React.FC<SettingsProps> = ({
     doc.text(`Total Records Added:      ${allLogs.length} entries`, 110, y + 18);
     y += 50;
 
-    const drawHeader = (title: string, color: [number, number, number], cols: { name: string, x: number }[]) => {
-      doc.addPage();
-      y = 20;
+    // Report Information section
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(50, 50, 50);
+    doc.text("REPORT INFORMATION", 14, y);
+    y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Patient Account: ${userEmail}`, 14, y);
+    y += 5;
+    doc.text(`Generated On: ${new Date().toLocaleString()}`, 14, y);
+    y += 5;
+    doc.text(`Total Records: ${allLogs.length}`, 14, y);
+    y += 10;
+
+    // ─── Section header helpers ──────────────────────────────────────────────
+
+    const drawHeader = (title: string, color: [number, number, number], cols: { name: string; x: number }[]) => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(50, 50, 50);
@@ -211,67 +226,163 @@ export const Settings: React.FC<SettingsProps> = ({
       doc.setTextColor(60, 60, 60);
     };
 
-    // Vitals
-    drawHeader("1. BLOOD PRESSURE & HEART RATE LOGS", [79, 93, 117], [
-        { name: "Date & Time", x: 16 }, { name: "Sys / Dia", x: 60 }, { name: "Heart Rate", x: 90 }, { name: "SpO2", x: 115 }, { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
-    ]);
-    vitals.forEach(v => {
-      if (y > 280) drawHeader("1. BLOOD PRESSURE & HEART RATE LOGS (Cont.)", [79, 93, 117], [
-        { name: "Date & Time", x: 16 }, { name: "Sys / Dia", x: 60 }, { name: "Heart Rate", x: 90 }, { name: "SpO2", x: 115 }, { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
-      ]);
-      doc.text(fmtDT(v.timestamp), 16, y);
-      doc.text(`${v.systolic}/${v.diastolic} mmHg`, 60, y);
-      doc.text(`${v.hr} bpm`, 90, y);
-      doc.text(v.spo2 ? `${v.spo2}%` : 'N/A', 115, y);
-      doc.text(evaluateBP(v.systolic, v.diastolic).status, 135, y);
-      doc.text(v.notes ? (v.notes.substring(0, 16)) : '', 165, y);
-      y += 7;
-    });
+    const drawContinuationHeader = (title: string, color: [number, number, number], cols: { name: string; x: number }[]) => {
+      doc.addPage();
+      y = 20;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(50, 50, 50);
+      doc.text(title, 14, y);
+      y += 6;
+      doc.setFillColor(...color);
+      doc.rect(14, y, 182, 7, 'F');
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      cols.forEach(c => doc.text(c.name, c.x, y + 5));
+      y += 12;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60, 60, 60);
+    };
 
-    // Glucose
-    drawHeader("2. BLOOD GLUCOSE LOGS", [115, 93, 120], [
-        { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 65 }, { name: "Context", x: 100 }, { name: "Guidelines Status", x: 130 }, { name: "Diet Notes", x: 165 }
-    ]);
-    glucose.forEach(g => {
-      if (y > 280) drawHeader("2. BLOOD GLUCOSE LOGS (Cont.)", [115, 93, 120], [
-        { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 65 }, { name: "Context", x: 100 }, { name: "Guidelines Status", x: 130 }, { name: "Diet Notes", x: 165 }
-      ]);
-      doc.text(fmtDT(g.timestamp), 16, y);
-      doc.text(`${g.value} mg/dL`, 65, y);
-      doc.text(g.context.toUpperCase(), 100, y);
-      doc.text(evaluateGlucose(g.value, g.context).status, 130, y);
-      doc.text(g.notes ? (g.notes.substring(0, 16)) : '', 165, y);
-      y += 7;
-    });
+    // ─── Section 1: Vitals ───────────────────────────────────────────────────
 
-    // Weight
-    drawHeader("3. WEIGHT TRACKER LOGS", [34, 139, 34], [
-        { name: "Date & Time", x: 16 }, { name: "Weight (kg)", x: 80 }, { name: "Notes", x: 130 }
-    ]);
-    weights.forEach(w => {
-      if (y > 280) drawHeader("3. WEIGHT TRACKER LOGS (Cont.)", [34, 139, 34], [
-        { name: "Date & Time", x: 16 }, { name: "Weight (kg)", x: 80 }, { name: "Notes", x: 130 }
-      ]);
-      doc.text(fmtDT(w.timestamp), 16, y);
-      doc.text(`${w.value} kg`, 80, y);
-      doc.text(w.notes ? (w.notes.substring(0, 30)) : '', 130, y);
-      y += 7;
-    });
+    const vitalsCols = [
+      { name: "Date & Time", x: 16 }, { name: "Sys / Dia", x: 60 },
+      { name: "Heart Rate", x: 90 }, { name: "SpO2", x: 115 },
+      { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
+    ];
 
-    // Reports
-    drawHeader("4. MEDICAL LAB REPORTS", [210, 105, 30], [
-        { name: "Date & Time", x: 16 }, { name: "Type", x: 60 }, { name: "Title", x: 90 }, { name: "Notes / Observations", x: 140 }
-    ]);
-    reports.forEach(r => {
-      if (y > 280) drawHeader("4. MEDICAL LAB REPORTS (Cont.)", [210, 105, 30], [
-        { name: "Date & Time", x: 16 }, { name: "Type", x: 60 }, { name: "Title", x: 90 }, { name: "Notes / Observations", x: 140 }
-      ]);
-      doc.text(fmtDT(r.timestamp), 16, y);
-      doc.text(r.report_type, 60, y);
-      doc.text(r.title.substring(0, 22), 90, y);
-      doc.text(r.notes ? (r.notes.substring(0, 25)) : '', 140, y);
-      y += 7;
-    });
+    y += 10;
+    drawHeader("1. BLOOD PRESSURE & HEART RATE LOGS", [79, 93, 117], vitalsCols);
+
+    if (vitals.length === 0) {
+      doc.text("No vitals data logs recorded.", 16, y); y += 10;
+    } else {
+      vitals.forEach(v => {
+        if (y + 7 > 280) drawContinuationHeader("1. BLOOD PRESSURE & HEART RATE LOGS (Cont.)", [79, 93, 117], vitalsCols);
+        doc.setFontSize(8);
+        const bpStatus = evaluateBP(v.systolic, v.diastolic).status
+          .replace("Stage 1 Hypertension", "Stage 1 HTN")
+          .replace("Stage 2 Hypertension", "Stage 2 HTN")
+          .replace("Hypertensive Crisis", "Crisis");
+        const noteLines = doc.splitTextToSize(v.notes || '', 20).slice(0, 2);
+        doc.text(fmtDT(v.timestamp), 16, y);
+        doc.text(`${v.systolic}/${v.diastolic} mmHg`, 60, y);
+        doc.text(v.hr ? `${v.hr} bpm` : 'N/A', 90, y);
+        doc.text(v.spo2 ? `${v.spo2}%` : 'N/A', 115, y);
+        doc.text(bpStatus, 135, y);
+        doc.text(noteLines, 165, y);
+        y += 7;
+      });
+    }
+
+    y += 8;
+
+    // ─── Section 2: Glucose ──────────────────────────────────────────────────
+
+    const glucoseCols = [
+      { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 65 },
+      { name: "Context", x: 100 }, { name: "Guidelines Status", x: 130 },
+      { name: "Diet Notes", x: 165 }
+    ];
+
+    if (y + 20 > 280) { doc.addPage(); y = 20; }
+    drawHeader("2. BLOOD GLUCOSE LOGS", [115, 93, 120], glucoseCols);
+
+    if (glucose.length === 0) {
+      doc.text("No glucose readings logs recorded.", 16, y); y += 10;
+    } else {
+      glucose.forEach(g => {
+        if (y + 7 > 280) drawContinuationHeader("2. BLOOD GLUCOSE LOGS (Cont.)", [115, 93, 120], glucoseCols);
+        doc.setFontSize(8);
+        const noteLines = doc.splitTextToSize(g.notes || '', 20).slice(0, 2);
+        doc.text(fmtDT(g.timestamp), 16, y);
+        doc.text(g.value ? `${g.value} mg/dL` : 'N/A', 65, y);
+        doc.text(g.context.toUpperCase(), 100, y);
+        doc.text(evaluateGlucose(g.value, g.context).status, 130, y);
+        doc.text(noteLines, 165, y);
+        y += 7;
+      });
+    }
+
+    y += 8;
+
+    // ─── Section 3: Weight ───────────────────────────────────────────────────
+
+    const weightCols = [
+      { name: "Date & Time", x: 16 }, { name: "Weight (kg)", x: 80 }, { name: "Notes", x: 130 }
+    ];
+
+    if (y + 20 > 280) { doc.addPage(); y = 20; }
+    drawHeader("3. WEIGHT TRACKER LOGS", [34, 139, 34], weightCols);
+
+    if (weights.length === 0) {
+      doc.text("No weight data logs recorded.", 16, y); y += 10;
+    } else {
+      weights.forEach(w => {
+        if (y + 7 > 280) drawContinuationHeader("3. WEIGHT TRACKER LOGS (Cont.)", [34, 139, 34], weightCols);
+        doc.setFontSize(8);
+        const noteLines = doc.splitTextToSize(w.notes || '', 40).slice(0, 2);
+        doc.text(fmtDT(w.timestamp), 16, y);
+        doc.text(w.value ? `${w.value} kg` : 'N/A', 80, y);
+        doc.text(noteLines, 130, y);
+        y += 7;
+      });
+    }
+
+    y += 8;
+
+    // ─── Section 4: Medical Reports ──────────────────────────────────────────
+
+    const reportsCols = [
+      { name: "Date & Time", x: 16 }, { name: "Type", x: 60 },
+      { name: "Title", x: 90 }, { name: "Notes / Observations", x: 140 }
+    ];
+
+    if (y + 20 > 280) { doc.addPage(); y = 20; }
+    drawHeader("4. MEDICAL LAB REPORTS", [210, 105, 30], reportsCols);
+
+    if (reports.length === 0) {
+      doc.text("No medical reports saved.", 16, y);
+    } else {
+      reports.forEach(r => {
+        if (y + 7 > 280) drawContinuationHeader("4. MEDICAL LAB REPORTS (Cont.)", [210, 105, 30], reportsCols);
+        doc.setFontSize(8);
+        const titleLines = doc.splitTextToSize(r.title || '', 35).slice(0, 2);
+        const noteLines = doc.splitTextToSize(r.notes || '', 35).slice(0, 2);
+        doc.text(fmtDT(r.timestamp), 16, y);
+        doc.text(r.report_type, 60, y);
+        doc.text(titleLines, 90, y);
+        doc.text(noteLines, 140, y);
+        y += 7;
+      });
+    }
+
+    // ─── Disclaimer page ─────────────────────────────────────────────────────
+
+    doc.addPage();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(50, 50, 50);
+    doc.text("IMPORTANT DISCLAIMER", 14, 25);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    const disclaimer = doc.splitTextToSize(
+      `This report is generated from user-entered health data and uploaded medical records. It is intended solely for record keeping and informational purposes. This document is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional regarding medical concerns and treatment decisions.`,
+      170
+    );
+    doc.text(disclaimer, 14, 40);
+
+    // ─── Page numbers ─────────────────────────────────────────────────────────
+
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.text(`Page ${i} of ${pageCount}`, 170, 290);
+    }
 
     doc.save("vitaldiary_health_report.pdf");
     showToast('PDF Report downloaded successfully.', 'success');
