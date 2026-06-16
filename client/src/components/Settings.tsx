@@ -162,209 +162,116 @@ export const Settings: React.FC<SettingsProps> = ({
     // Header
     doc.setFillColor(34, 49, 63);
     doc.rect(0, 0, 220, 35, 'F');
-
     doc.setFont("helvetica", "bold");
     doc.setFontSize(22);
     doc.setTextColor(255, 255, 255);
     doc.text("VITALDIARY HEALTH REPORT", 14, 23);
-
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text(`User Account: ${userEmail}  |  Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
-
     y = 50;
 
     // Averages Subcard
     doc.setFillColor(242, 245, 248);
     doc.rect(14, y, 182, 35, 'F');
-
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(50, 50, 50);
     doc.text("REPORT SUMMARY & STATISTICAL AVERAGES (LAST 30 DAYS)", 18, y + 8);
-
-    // Compute Stats
     const totalV = vitals.length;
     const avgSys = totalV ? Math.round(vitals.reduce((a, b) => a + b.systolic, 0) / totalV) : 0;
     const avgDia = totalV ? Math.round(vitals.reduce((a, b) => a + b.diastolic, 0) / totalV) : 0;
     const avgHr = totalV ? Math.round(vitals.reduce((a, b) => a + b.hr, 0) / totalV) : 0;
-
     const glFasting = glucose.filter(g => g.context === 'fasting');
     const avgFast = glFasting.length ? Math.round(glFasting.reduce((a, b) => a + b.value, 0) / glFasting.length) : 0;
-
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(`Average Blood Pressure:  ${avgSys ? `${avgSys}/${avgDia} mmHg` : 'N/A'}`, 18, y + 18);
     doc.text(`Average Heart Rate:      ${avgHr ? `${avgHr} bpm` : 'N/A'}`, 18, y + 24);
     doc.text(`Average Fasting Glucose:  ${avgFast ? `${avgFast} mg/dL` : 'N/A'}`, 18, y + 30);
     doc.text(`Total Records Added:      ${allLogs.length} entries`, 110, y + 18);
+    y += 50;
 
-    y += 45;
-
-    // Vitals table title
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text("1. BLOOD PRESSURE & HEART RATE LOGS", 14, y);
-    y += 6;
-
-    // Vitals Table Header
-    doc.setFillColor(79, 93, 117);
-    doc.rect(14, y, 182, 7, 'F');
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.text("Date & Time", 16, y + 5);
-    doc.text("Sys / Dia", 60, y + 5);
-    doc.text("Heart Rate", 90, y + 5);
-    doc.text("SpO2", 115, y + 5);
-    doc.text("Medical Status", 135, y + 5);
-    doc.text("Notes", 165, y + 5);
-
-    y += 7;
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(60, 60, 60);
-
-    const vitalsToPrint = vitals.slice(0, 15);
-    if (vitalsToPrint.length === 0) {
-      doc.text("No vitals data logs recorded.", 16, y + 5);
-      y += 10;
-    } else {
-      vitalsToPrint.forEach(v => {
-        doc.text(fmtDT(v.timestamp), 16, y + 5);
-        doc.text(`${v.systolic}/${v.diastolic} mmHg`, 60, y + 5);
-        doc.text(`${v.hr} bpm`, 90, y + 5);
-        doc.text(v.spo2 ? `${v.spo2}%` : 'N/A', 115, y + 5);
-        doc.text(evaluateBP(v.systolic, v.diastolic).status, 135, y + 5);
-        doc.text(v.notes ? (v.notes.substring(0, 16) + (v.notes.length > 16 ? '..' : '')) : '', 165, y + 5);
-        y += 7;
-      });
-    }
-
-    y += 10;
-
-    // Glucose Table Title
-    if (y > 250) {
+    const drawHeader = (title: string, color: [number, number, number], cols: { name: string, x: number }[]) => {
       doc.addPage();
       y = 20;
-    }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(50, 50, 50);
+      doc.text(title, 14, y);
+      y += 6;
+      doc.setFillColor(...color);
+      doc.rect(14, y, 182, 7, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      cols.forEach(c => doc.text(c.name, c.x, y + 5));
+      y += 12;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60, 60, 60);
+    };
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(50, 50, 50);
-    doc.text("2. BLOOD GLUCOSE LOGS", 14, y);
-    y += 6;
+    // Vitals
+    drawHeader("1. BLOOD PRESSURE & HEART RATE LOGS", [79, 93, 117], [
+        { name: "Date & Time", x: 16 }, { name: "Sys / Dia", x: 60 }, { name: "Heart Rate", x: 90 }, { name: "SpO2", x: 115 }, { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
+    ]);
+    vitals.forEach(v => {
+      if (y > 280) drawHeader("1. BLOOD PRESSURE & HEART RATE LOGS (Cont.)", [79, 93, 117], [
+        { name: "Date & Time", x: 16 }, { name: "Sys / Dia", x: 60 }, { name: "Heart Rate", x: 90 }, { name: "SpO2", x: 115 }, { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
+      ]);
+      doc.text(fmtDT(v.timestamp), 16, y);
+      doc.text(`${v.systolic}/${v.diastolic} mmHg`, 60, y);
+      doc.text(`${v.hr} bpm`, 90, y);
+      doc.text(v.spo2 ? `${v.spo2}%` : 'N/A', 115, y);
+      doc.text(evaluateBP(v.systolic, v.diastolic).status, 135, y);
+      doc.text(v.notes ? (v.notes.substring(0, 16)) : '', 165, y);
+      y += 7;
+    });
 
-    // Glucose Table Header
-    doc.setFillColor(115, 93, 120);
-    doc.rect(14, y, 182, 7, 'F');
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.text("Date & Time", 16, y + 5);
-    doc.text("Glucose Level", 65, y + 5);
-    doc.text("Context", 100, y + 5);
-    doc.text("Guidelines Status", 130, y + 5);
-    doc.text("Diet Notes", 165, y + 5);
+    // Glucose
+    drawHeader("2. BLOOD GLUCOSE LOGS", [115, 93, 120], [
+        { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 65 }, { name: "Context", x: 100 }, { name: "Guidelines Status", x: 130 }, { name: "Diet Notes", x: 165 }
+    ]);
+    glucose.forEach(g => {
+      if (y > 280) drawHeader("2. BLOOD GLUCOSE LOGS (Cont.)", [115, 93, 120], [
+        { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 65 }, { name: "Context", x: 100 }, { name: "Guidelines Status", x: 130 }, { name: "Diet Notes", x: 165 }
+      ]);
+      doc.text(fmtDT(g.timestamp), 16, y);
+      doc.text(`${g.value} mg/dL`, 65, y);
+      doc.text(g.context.toUpperCase(), 100, y);
+      doc.text(evaluateGlucose(g.value, g.context).status, 130, y);
+      doc.text(g.notes ? (g.notes.substring(0, 16)) : '', 165, y);
+      y += 7;
+    });
 
-    y += 7;
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(60, 60, 60);
+    // Weight
+    drawHeader("3. WEIGHT TRACKER LOGS", [34, 139, 34], [
+        { name: "Date & Time", x: 16 }, { name: "Weight (kg)", x: 80 }, { name: "Notes", x: 130 }
+    ]);
+    weights.forEach(w => {
+      if (y > 280) drawHeader("3. WEIGHT TRACKER LOGS (Cont.)", [34, 139, 34], [
+        { name: "Date & Time", x: 16 }, { name: "Weight (kg)", x: 80 }, { name: "Notes", x: 130 }
+      ]);
+      doc.text(fmtDT(w.timestamp), 16, y);
+      doc.text(`${w.value} kg`, 80, y);
+      doc.text(w.notes ? (w.notes.substring(0, 30)) : '', 130, y);
+      y += 7;
+    });
 
-    const glucoseToPrint = glucose.slice(0, 15);
-    if (glucoseToPrint.length === 0) {
-      doc.text("No glucose readings logs recorded.", 16, y + 5);
-      y += 10;
-    } else {
-      glucoseToPrint.forEach(g => {
-        doc.text(fmtDT(g.timestamp), 16, y + 5);
-        doc.text(`${g.value} mg/dL`, 65, y + 5);
-        doc.text(g.context.toUpperCase(), 100, y + 5);
-        doc.text(evaluateGlucose(g.value, g.context).status, 130, y + 5);
-        doc.text(g.notes ? (g.notes.substring(0, 16) + (g.notes.length > 16 ? '..' : '')) : '', 165, y + 5);
-        y += 7;
-      });
-    }
-
-    y += 10;
-
-    // Weight Table Title
-    if (y > 240) {
-      doc.addPage();
-      y = 20;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(50, 50, 50);
-    doc.text("3. WEIGHT TRACKER LOGS", 14, y);
-    y += 6;
-
-    doc.setFillColor(34, 139, 34); // Forest green
-    doc.rect(14, y, 182, 7, 'F');
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.text("Date & Time", 16, y + 5);
-    doc.text("Weight (kg)", 80, y + 5);
-    doc.text("Notes", 130, y + 5);
-
-    y += 7;
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(60, 60, 60);
-
-    const weightsToPrint = weights.slice(0, 10);
-    if (weightsToPrint.length === 0) {
-      doc.text("No weight data logs recorded.", 16, y + 5);
-      y += 10;
-    } else {
-      weightsToPrint.forEach(w => {
-        doc.text(fmtDT(w.timestamp), 16, y + 5);
-        doc.text(`${w.value} kg`, 80, y + 5);
-        doc.text(w.notes ? (w.notes.substring(0, 30) + (w.notes.length > 30 ? '..' : '')) : '', 130, y + 5);
-        y += 7;
-      });
-    }
-
-    y += 10;
-
-    // Reports Table Title
-    if (y > 240) {
-      doc.addPage();
-      y = 20;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(50, 50, 50);
-    doc.text("4. MEDICAL LAB REPORTS", 14, y);
-    y += 6;
-
-    doc.setFillColor(210, 105, 30); // Orange/Brown
-    doc.rect(14, y, 182, 7, 'F');
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.text("Date & Time", 16, y + 5);
-    doc.text("Type", 60, y + 5);
-    doc.text("Title", 90, y + 5);
-    doc.text("Notes / Observations", 140, y + 5);
-
-    y += 7;
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(60, 60, 60);
-
-    const reportsToPrint = reports.slice(0, 10);
-    if (reportsToPrint.length === 0) {
-      doc.text("No medical reports saved.", 16, y + 5);
-    } else {
-      reportsToPrint.forEach(r => {
-        doc.text(fmtDT(r.timestamp), 16, y + 5);
-        doc.text(r.report_type, 60, y + 5);
-        doc.text(r.title.substring(0, 22), 90, y + 5);
-        doc.text(r.notes ? (r.notes.substring(0, 25) + (r.notes.length > 25 ? '..' : '')) : '', 140, y + 5);
-        y += 7;
-      });
-    }
+    // Reports
+    drawHeader("4. MEDICAL LAB REPORTS", [210, 105, 30], [
+        { name: "Date & Time", x: 16 }, { name: "Type", x: 60 }, { name: "Title", x: 90 }, { name: "Notes / Observations", x: 140 }
+    ]);
+    reports.forEach(r => {
+      if (y > 280) drawHeader("4. MEDICAL LAB REPORTS (Cont.)", [210, 105, 30], [
+        { name: "Date & Time", x: 16 }, { name: "Type", x: 60 }, { name: "Title", x: 90 }, { name: "Notes / Observations", x: 140 }
+      ]);
+      doc.text(fmtDT(r.timestamp), 16, y);
+      doc.text(r.report_type, 60, y);
+      doc.text(r.title.substring(0, 22), 90, y);
+      doc.text(r.notes ? (r.notes.substring(0, 25)) : '', 140, y);
+      y += 7;
+    });
 
     doc.save("vitaldiary_health_report.pdf");
     showToast('PDF Report downloaded successfully.', 'success');
