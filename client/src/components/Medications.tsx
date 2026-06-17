@@ -12,6 +12,16 @@ type Medication = {
 
 const TIME_OF_DAY_OPTIONS: TimeOfDay[] = ['morning', 'afternoon', 'night'];
 
+const TIME_OF_DAY_GROUPS: TimeOfDay[][] = [
+  ['morning'],
+  ['afternoon'],
+  ['night'],
+  ['morning', 'night'],
+  ['morning', 'afternoon'],
+  ['afternoon', 'night'],
+  ['morning', 'afternoon', 'night'],
+];
+
 const normalizeTimeOfDay = (value: unknown): TimeOfDay[] => {
   if (Array.isArray(value)) {
     return TIME_OF_DAY_OPTIONS.filter(option => value.includes(option));
@@ -26,6 +36,12 @@ const normalizeTimeOfDay = (value: unknown): TimeOfDay[] => {
 
 const formatTimeOfDay = (timeOfDay: TimeOfDay[]) =>
   timeOfDay.map(time => time.charAt(0).toUpperCase() + time.slice(1)).join(', ');
+
+const getTimeOfDayKey = (timeOfDay: TimeOfDay[]) =>
+  [...timeOfDay].sort().join('+');
+
+const formatTimeOfDayGroup = (timeOfDay: TimeOfDay[]) =>
+  timeOfDay.map(time => time.charAt(0).toUpperCase() + time.slice(1)).join(' + ');
 
 const MEDICATIONS_KEY = 'vital_diary_medications';
 
@@ -135,9 +151,9 @@ export const Medications: React.FC = () => {
     setMedications(prev => prev.filter(med => med.id !== id));
   };
 
-  const medicationsByTimeOfDay = TIME_OF_DAY_OPTIONS.map(time => ({
-    time,
-    medications: medications.filter(medication => medication.timeOfDay.includes(time)),
+  const medicationsByTimeOfDay = TIME_OF_DAY_GROUPS.map(group => ({
+    group,
+    medications: medications.filter(medication => getTimeOfDayKey(medication.timeOfDay) === getTimeOfDayKey(group)),
   }));
 
   return (
@@ -157,15 +173,15 @@ export const Medications: React.FC = () => {
           {medications.length === 0 ? (
             <div className="text-muted py-4 text-center">No medications added yet.</div>
           ) : (
-            medicationsByTimeOfDay.map(({ time, medications: groupedMedications }) => (
+            medicationsByTimeOfDay.map(({ group, medications: groupedMedications }) => (
               groupedMedications.length > 0 ? (
-                <div key={time} className="mb-4">
+                <div key={getTimeOfDayKey(group)} className="mb-4">
                   <div className="panel-title-group mb-2">
-                    <h4 style={{ margin: 0 }}>{time.charAt(0).toUpperCase() + time.slice(1)}</h4>
+                    <h4 style={{ margin: 0 }}>{formatTimeOfDayGroup(group)}</h4>
                   </div>
                   <div className="summary-list">
                     {groupedMedications.map(medication => (
-                      <div key={`${time}-${medication.id}`} className="summary-item">
+                      <div key={`${getTimeOfDayKey(group)}-${medication.id}`} className="summary-item">
                         <div>
                           <div className="summary-value">{medication.name}</div>
                           <div className="summary-label">{formatTimeOfDay(medication.timeOfDay)}</div>
