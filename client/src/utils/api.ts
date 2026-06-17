@@ -16,6 +16,23 @@ export interface WeightRecord {
   notes: string;
 }
 
+export interface ProfileRecord {
+  name: string;
+  age: string;
+  gender: string;
+  bloodGroup: string;
+  height: string;
+  allergies: string;
+  emergencyContact: string;
+}
+
+export interface MedicationRecord {
+  id: string;
+  name: string;
+  timeOfDay: Array<'morning' | 'afternoon' | 'night' | 'sos'>;
+  instructions: string;
+}
+
 export interface ReportRecord {
   id: string;
   user_id: number;
@@ -212,5 +229,31 @@ export const api = {
 
   async deleteReport(id: string) {
     return await request(`/api/reports/${id}`, 'DELETE');
+  },
+
+  // Profile
+  async getProfile(): Promise<ProfileRecord> {
+    return await request('/api/profile', 'GET');
+  },
+
+  async saveProfile(data: ProfileRecord): Promise<ProfileRecord> {
+    return await request('/api/profile', 'PUT', data);
+  },
+
+  // Medications
+  async getMedications(): Promise<MedicationRecord[]> {
+    return await request('/api/medications', 'GET');
+  },
+
+  async createMedication(data: MedicationRecord): Promise<MedicationRecord> {
+    return await request('/api/medications', 'POST', data);
+  },
+
+  async updateMedication(id: string, data: MedicationRecord): Promise<MedicationRecord> {
+    return await request(`/api/medications/${id}`, 'PUT', data);
+  },
+
+  async deleteMedication(id: string) {
+    return await request(`/api/medications/${id}`, 'DELETE');
   }
 };

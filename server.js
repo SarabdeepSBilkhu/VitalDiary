@@ -36,6 +36,8 @@ initDatabase();
 
 // API Routers
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/profile', require('./routes/profile'));
+app.use('/api/medications', require('./routes/medications'));
 app.use('/api/vitals', require('./routes/vitals'));
 app.use('/api/glucose', require('./routes/glucose'));
 app.use('/api/weight', require('./routes/weight'));

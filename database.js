@@ -181,11 +181,42 @@ async function initDatabase(retries = 15, delay = 4000) {
         )
       `);
 
+      // 6. Profile Table
+      await dbQuery.run(`
+        CREATE TABLE IF NOT EXISTS profiles (
+          user_id INTEGER PRIMARY KEY,
+          name TEXT,
+          age TEXT,
+          gender TEXT,
+          blood_group TEXT,
+          height TEXT,
+          allergies TEXT,
+          emergency_contact TEXT,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+      `);
+
+      // 7. Medications Table
+      await dbQuery.run(`
+        CREATE TABLE IF NOT EXISTS medications (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          time_of_day TEXT NOT NULL,
+          instructions TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )
+      `);
+
       // Create indexes for efficient retrieval scoped by user and ordered by time
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_vitals_user_time ON vitals(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_glucose_user_time ON glucose(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_weight_user_time ON weight(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_reports_user_time ON reports(user_id, timestamp DESC)`);
+      await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_medications_user_name ON medications(user_id, name)`);
 
       console.log('Database schemas successfully verified/created.');
       isDbReady = true;
