@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, LineChart as ChartIcon, Calendar, Clock, Settings as SettingsIcon, 
   HeartPulse, PlusCircle, LogOut, Sun, Moon, Sparkles, Loader2, UserCircle2, Pill 
@@ -48,6 +48,7 @@ export const App: React.FC = () => {
 
   // Toast state
   const [toasts, setToasts] = useState<ToastType[]>([]);
+  const dbWasWakingRef = useRef(false);
 
   // Sync theme
   useEffect(() => {
@@ -79,11 +80,15 @@ export const App: React.FC = () => {
   // Listen for database warming state
   useEffect(() => {
     const handleDbWaking = (e: any) => {
+      dbWasWakingRef.current = true;
       setDbWaking(e.detail);
     };
     const handleDbReady = () => {
       setDbWaking(null);
-      showToast('Database connected successfully!', 'success');
+      if (dbWasWakingRef.current) {
+        showToast('Database connected successfully!', 'success');
+        dbWasWakingRef.current = false;
+      }
       handleRefreshData();
     };
     window.addEventListener('db-waking-up', handleDbWaking);

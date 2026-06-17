@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
+import { parseReportParameters } from './Analytics';
 
 const fmtDT = (ts: string) => {
   const d = new Date(ts);
@@ -50,7 +51,7 @@ export const Settings: React.FC<SettingsProps> = ({
     }
 
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Type,Timestamp/Date,Systolic (BP),Diastolic (BP),Heart Rate (bpm),Oxygen (SpO2 %),Glucose (mg/dL),Glucose Context,Weight (kg),Report Type,Report Title,Report Lab Data,Notes/Comments\r\n";
+    csvContent += "Type,Timestamp/Date,Systolic (BP),Diastolic (BP),Heart Rate (bpm),Oxygen (SpO2 %),Glucose (mg/dL),Glucose Context,Weight (kg),Report Type,Report Lab Data,Notes/Comments\r\n";
 
     allLogs.forEach(log => {
       const type = log.type;
@@ -65,7 +66,7 @@ export const Settings: React.FC<SettingsProps> = ({
         csvContent += `Weight,${w.timestamp},,,,,,,,${w.value},,,,${(w.notes || '').replace(/"/g, '""')}\r\n`;
       } else if (type === 'reports') {
         const r = log as ReportRecord;
-        csvContent += `Report,${r.timestamp},,,,,,,,,,${r.report_type},"${(r.data || '').replace(/"/g, '""')}","${(r.notes || '').replace(/"/g, '""')}"\r\n`;
+        csvContent += `Report,${r.timestamp},,,,,,,,${r.report_type},"${(r.data || '').replace(/"/g, '""')}","${(r.notes || '').replace(/"/g, '""')}"\r\n`;
       }
     });
 
@@ -333,25 +334,120 @@ export const Settings: React.FC<SettingsProps> = ({
 
     // ─── Section 4: Medical Reports ──────────────────────────────────────────
 
-    const reportsCols = [
-      { name: "Date & Time", x: 16 }, { name: "Type", x: 60 },
-      { name: "Title", x: 90 }, { name: "Notes / Observations", x: 140 }
-    ];
+    const ensurePageSpace = (needed: number) => {
+      if (y + needed > 280) {
+        doc.addPage();
+        y = 20;
+      }
+    };
+
+    const drawReportSectionHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(50, 50, 50);
+      doc.text("4. MEDICAL LAB REPORTS", 14, y);
+      y += 8;
+    };
 
     if (y + 20 > 280) { doc.addPage(); y = 20; }
-    drawHeader("4. MEDICAL LAB REPORTS", [210, 105, 30], reportsCols);
+    drawReportSectionHeader();
 
     if (reports.length === 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(60, 60, 60);
       doc.text("No medical reports saved.", 16, y);
+      y += 10;
     } else {
-      reports.forEach(r => {
-        if (y + 7 > 280) drawContinuationHeader("4. MEDICAL LAB REPORTS (Cont.)", [210, 105, 30], reportsCols);
+      reports.forEach((r, index) => {
+        if (index > 0 && y + 30 > 280) {
+          doc.addPage();
+          y = 20;
+          drawReportSectionHeader();
+        } else {
+          ensurePageSpace(30);
+        }
+
+        doc.setDrawColor(210, 105, 30);
+        doc.setLineWidth(0.3);
+        doc.setFillColor(255, 248, 240);
+        doc.roundedRect(14, y, 182, 8, 1, 1, 'FD');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(80, 45, 10);
+        doc.text(`${fmtDT(r.timestamp)}`, 16, y + 5.5);
+        doc.text(r.report_type, 150, y + 5.5);
+        y += 12;
+
+        const params = parseReportParameters(r.data || '');
+        const paramKeys = Object.keys(params);
+
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
-        const noteLines = doc.splitTextToSize(r.notes || '', 35).slice(0, 2);
-        doc.text(fmtDT(r.timestamp), 16, y);
-        doc.text(r.report_type, 60, y);
-        doc.text(noteLines, 90, y);
-        y += 7;
+        doc.setTextColor(50, 50, 50);
+        doc.text("Lab Results", 16, y);
+        y += 5;
+
+        if (paramKeys.length > 0) {
+          doc.setFillColor(210, 105, 30);
+          doc.rect(16, y, 176, 6, 'F');
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(7);
+          doc.setTextColor(255, 255, 255);
+          doc.text("Parameter", 18, y + 4.2);
+          doc.text("Value", 115, y + 4.2);
+          y += 8;
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(60, 60, 60);
+          paramKeys.forEach((key, paramIndex) => {
+            ensurePageSpace(6);
+            if (paramIndex % 2 === 0) {
+              doc.setFillColor(248, 248, 248);
+              doc.rect(16, y - 3.5, 176, 5.5, 'F');
+            }
+            doc.text(key, 18, y);
+            doc.text(String(params[key]), 115, y);
+            y += 5.5;
+          });
+        } else if (r.data?.trim()) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(60, 60, 60);
+          const resultLines = doc.splitTextToSize(r.data.trim(), 176);
+          resultLines.forEach((line: string) => {
+            ensurePageSpace(5);
+            doc.text(line, 16, y);
+            y += 4.5;
+          });
+        } else {
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8);
+          doc.setTextColor(120, 120, 120);
+          doc.text("No lab results recorded.", 16, y);
+          y += 5;
+        }
+
+        if (r.notes?.trim()) {
+          y += 2;
+          ensurePageSpace(10);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(50, 50, 50);
+          doc.text("Notes / Observations", 16, y);
+          y += 5;
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(60, 60, 60);
+          const noteLines = doc.splitTextToSize(r.notes.trim(), 176);
+          noteLines.forEach((line: string) => {
+            ensurePageSpace(5);
+            doc.text(line, 16, y);
+            y += 4.5;
+          });
+        }
+
+        y += 6;
       });
     }
 

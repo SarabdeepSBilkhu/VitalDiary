@@ -167,6 +167,16 @@ export async function migrateProfileAndMedicationsFromLocalStorage(): Promise<{
   return { profileMigrated, medicationsMigrated };
 }
 
+let dbReadyNotifyTimer: ReturnType<typeof setTimeout> | null = null;
+
+function notifyDbReadyOnce() {
+  if (dbReadyNotifyTimer) return;
+  dbReadyNotifyTimer = setTimeout(() => {
+    window.dispatchEvent(new Event('db-ready'));
+    dbReadyNotifyTimer = null;
+  }, 50);
+}
+
 // Request dispatcher helper with auto-retry for database cold start warming
 async function request(url: string, method: string = 'GET', data?: any) {
   const token = getToken();
@@ -219,7 +229,7 @@ async function request(url: string, method: string = 'GET', data?: any) {
     }
 
     if (attempts > 0 && response.ok) {
-      window.dispatchEvent(new Event('db-ready'));
+      notifyDbReadyOnce();
     }
   }
 
