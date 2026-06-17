@@ -353,6 +353,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
           <div className="summary-action-box" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <button className="btn btn-outline" onClick={() => onNavigate('profile-view')}>
+              + Profile
+            </button>
+            <button className="btn btn-outline" onClick={() => onNavigate('medications-view')}>
+              + Medications
+            </button>
             <button className="btn btn-outline" onClick={() => onOpenLogModal()}>
               + Vitals
             </button>

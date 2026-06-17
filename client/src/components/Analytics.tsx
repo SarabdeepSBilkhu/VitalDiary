@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, LineChart as ChartIcon, FlaskConical } from 'lucide-react';
+import { Calculator, LineChart as ChartIcon, FlaskConical, FileText } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel } from '../utils/evaluators';
@@ -53,6 +53,30 @@ const PARAM_COLORS = [
   'hsl(310, 70%, 55%)',
 ];
 
+const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'KFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Other Reports'] as const;
+
+type ReportType = typeof REPORT_TYPE_OPTIONS[number];
+
+const formatShortDate = (ts: string) => {
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const formatNumeric = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(2));
+
+const normalizeReportType = (value: string): ReportType => {
+  const lower = (value || '').toLowerCase();
+  if (lower.includes('cbc')) return 'CBC';
+  if (lower.includes('lft')) return 'LFT';
+  if (lower.includes('kft')) return 'KFT';
+  if (lower.includes('lipid')) return 'Lipid Profile';
+  if (lower.includes('thyroid')) return 'Thyroid Profile';
+  if (lower.includes('hba1c')) return 'HbA1c';
+  return 'Other Reports';
+};
+
+const getReportTypeFromRecord = (report: ReportRecord): ReportType => normalizeReportType(report.report_type || report.title || report.data || '');
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 interface AnalyticsProps {
@@ -65,6 +89,7 @@ interface AnalyticsProps {
 export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, reports }) => {
   const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight' | 'reports'>('bp');
   const [timeframe, setTimeframe] = useState<'7days' | '30days' | 'year' | 'all'>('30days');
+  const [selectedReportType, setSelectedReportType] = useState<ReportType>('CBC');
   const [selectedParam, setSelectedParam] = useState<string>('');
 
   // 1. Filter logs by metric and timeframe
@@ -94,12 +119,113 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     return collectParameters(filteredLogs as ReportRecord[]);
   }, [metric, filteredLogs]);
 
+  const reportGroups = useMemo(() => {
+    const groups: Record<ReportType, ReportRecord[]> = {
+      CBC: [],
+      LFT: [],
+      KFT: [],
+      'Lipid Profile': [],
+      'Thyroid Profile': [],
+      HbA1c: [],
+      'Other Reports': [],
+    };
+
+    reports.forEach(report => {
+      groups[getReportTypeFromRecord(report)].push(report);
+    });
+
+    Object.values(groups).forEach(group => {
+      group.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    });
+
+    return groups;
+  }, [reports]);
+
+  const activeReportLogs = useMemo(() => reportGroups[selectedReportType], [reportGroups, selectedReportType]);
+  const activeReportParams = useMemo(() => collectParameters(activeReportLogs), [activeReportLogs]);
+  const activeReportParam = useMemo(() => {
+    if (activeReportParams.includes(selectedParam)) return selectedParam;
+    return activeReportParams[0] ?? '';
+  }, [activeReportParams, selectedParam]);
+
   // Auto-select first param when params change
   const resolvedParam = useMemo(() => {
     if (metric !== 'reports') return '';
     if (availableParams.includes(selectedParam)) return selectedParam;
     return availableParams[0] ?? '';
   }, [metric, availableParams, selectedParam]);
+
+  const activeReportChartData = useMemo(() => {
+    if (!activeReportParam || activeReportLogs.length === 0) return null;
+    const labels = [...activeReportLogs].reverse().map(r => formatDateLabel(r.timestamp));
+    const values = [...activeReportLogs].reverse().map(r => {
+      const parsed = parseReportParameters(r.data);
+      const match = Object.entries(parsed).find(([key]) => key.toLowerCase() === activeReportParam.toLowerCase());
+      return match ? match[1] : null;
+    });
+
+    return {
+      labels,
+      datasets: [{
+        label: activeReportParam,
+        data: values,
+        borderColor: PARAM_COLORS[0],
+        backgroundColor: 'hsla(200, 85%, 55%, 0.12)',
+        borderWidth: 3,
+        tension: 0.25,
+        fill: true,
+        pointBackgroundColor: PARAM_COLORS[0],
+        pointHoverRadius: 7,
+        spanGaps: true,
+      }],
+    };
+  }, [activeReportLogs, activeReportParam]);
+
+  const activeReportComparisonRows = useMemo(() => {
+    const rows: { parameter: string; latest: number | null; previous: number | null; change: number | null }[] = [];
+    activeReportParams.forEach(parameter => {
+      const values: number[] = [];
+      activeReportLogs.forEach(report => {
+        const parsed = parseReportParameters(report.data);
+        Object.entries(parsed).forEach(([key, value]) => {
+          if (key.toLowerCase() === parameter.toLowerCase()) values.push(value);
+        });
+      });
+      const latest = values[0] ?? null;
+      const previous = values[1] ?? null;
+      const change = latest !== null && previous !== null && previous !== 0 ? ((latest - previous) / previous) * 100 : null;
+      rows.push({ parameter, latest, previous, change });
+    });
+    return rows;
+  }, [activeReportParams, activeReportLogs]);
+
+  const abnormalFindings = useMemo(() => {
+    if (!activeReportLogs.length) return [] as Array<{ parameter: string; value: number }>;
+    const latestReport = activeReportLogs[0];
+    const parsed = parseReportParameters(latestReport.data);
+    return Object.entries(parsed)
+      .filter(([key, value]) => {
+        const lower = key.toLowerCase();
+        if (lower.includes('hemoglobin') || lower === 'hb' || lower.includes('hgb')) return value < 12 || value > 17.5;
+        if (lower === 'rbc') return value < 4 || value > 6;
+        if (lower === 'wbc') return value < 4 || value > 11;
+        if (lower.includes('platelet')) return value < 150 || value > 450;
+        if (lower === 'pcv') return value < 36 || value > 52;
+        if (lower === 'mcv') return value < 80 || value > 100;
+        if (lower === 'hba1c') return value < 4 || value > 5.6;
+        if (lower.includes('tsh')) return value < 0.4 || value > 4.5;
+        return false;
+      })
+      .map(([parameter, value]) => ({ parameter, value }))
+      .slice(0, 8);
+  }, [activeReportLogs]);
+
+  const selectedReport = useMemo(() => activeReportLogs[0] ?? null, [activeReportLogs]);
+
+  const selectedHistoryReport = useMemo(() => {
+    if (!selectedReport) return null;
+    return selectedReport;
+  }, [selectedReport]);
 
   // 3. Calculate Stats based on filtered logs
   const stats = useMemo(() => {
@@ -286,33 +412,6 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     };
   }, [filteredLogs, metric]);
 
-  // All parameters trend chart – shows multiple params at once for overview
-  const allParamsChartData = useMemo(() => {
-    if (metric !== 'reports' || availableParams.length === 0) return null;
-    const repLogs = filteredLogs as ReportRecord[];
-    const labels = repLogs.map(r => formatDateLabel(r.timestamp));
-
-    const datasets = availableParams.slice(0, 8).map((param, i) => {
-      const color = PARAM_COLORS[i % PARAM_COLORS.length];
-      return {
-        label: param,
-        data: repLogs.map(r => {
-          const parsed = parseReportParameters(r.data);
-          return param in parsed ? parsed[param] : null;
-        }),
-        borderColor: color,
-        backgroundColor: 'transparent',
-        borderWidth: 2,
-        tension: 0.2,
-        fill: false,
-        pointBackgroundColor: color,
-        spanGaps: true,
-      };
-    });
-
-    return { labels, datasets };
-  }, [metric, filteredLogs, availableParams]);
-
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -441,69 +540,177 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
           {showReportCharts && (
             <div className="report-charts-stack">
-              {filteredLogs.length === 0 ? (
-                <div className="d-flex align-center justify-center h-100 text-muted">
-                  No reports in this time range. Add medical reports to view parameter trends.
-                </div>
-              ) : availableParams.length === 0 ? (
-                <div className="d-flex align-center justify-center h-100 text-muted">
-                  No numeric parameters found in report data.<br />
-                  Enter data like "Hb: 14.5", "WBC: 8.2", "Glucose: 95" in your reports.
-                </div>
-              ) : (
-                <>
-                  {/* Single selected-parameter trend chart */}
-                  {resolvedParam && (
-                    <div className="glucose-chart-section">
-                      <h4 className="glucose-chart-label color-primary">📈 {resolvedParam} — Trend Over Time</h4>
-                      <div className="chart-container-large">
-                        <Line data={chartData} options={chartOptions} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Overview of all parameters */}
-                  {availableParams.length > 1 && allParamsChartData && (
-                    <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
-                      <h4 className="glucose-chart-label color-rose">🔬 All Parameters Overview</h4>
-                      <div className="chart-container">
-                        <Line data={allParamsChartData} options={chartOptions} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Parameter index table */}
-                  <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
-                    <h4 className="glucose-chart-label" style={{ color: textColor }}>📋 Detected Parameters</h4>
-                    <div className="report-params-grid">
-                      {availableParams.map((param, i) => {
-                        const repLogs = filteredLogs as ReportRecord[];
-                        const values: number[] = [];
-                        repLogs.forEach(r => {
-                          const parsed = parseReportParameters(r.data);
-                          if (param in parsed) values.push(parsed[param]);
-                        });
-                        const avg = values.length ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2) : '--';
-                        const last = values.length ? values[values.length - 1].toFixed(2) : '--';
-                        return (
-                          <button
-                            key={param}
-                            className={`report-param-chip ${resolvedParam === param ? 'active' : ''}`}
-                            onClick={() => setSelectedParam(param)}
-                            style={{ borderLeftColor: PARAM_COLORS[i % PARAM_COLORS.length] }}
-                          >
-                            <span className="param-chip-name">{param}</span>
-                            <span className="param-chip-stats">
-                              <span>Avg: <strong>{avg}</strong></span>
-                              <span>Last: <strong>{last}</strong></span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+              <div className="panel panel-glass mb-4">
+                <div className="panel-header border-bottom">
+                  <div className="panel-title-group">
+                    <FileText className="color-primary" size={22} />
+                    <h3>Select Report Type</h3>
                   </div>
-                </>
-              )}
+                  <div className="filter-group" style={{ minWidth: '240px' }}>
+                    <select
+                      className="form-control"
+                      value={selectedReportType}
+                      onChange={(e) => {
+                        setSelectedReportType(e.target.value as ReportType);
+                        setSelectedParam('');
+                      }}
+                    >
+                      {REPORT_TYPE_OPTIONS.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {activeReportLogs.length === 0 ? (
+                  <div className="d-flex align-center justify-center h-100 text-muted">
+                    No {selectedReportType} reports found.
+                  </div>
+                ) : (
+                  <>
+                    <div className="summary-list" style={{ marginTop: '1rem' }}>
+                      <div className="summary-item">
+                        <div className="summary-label">Total Reports</div>
+                        <div className="summary-value">{activeReportLogs.length}</div>
+                      </div>
+                      <div className="summary-item">
+                        <div className="summary-label">Parameters Tracked</div>
+                        <div className="summary-value">{activeReportParams.length}</div>
+                      </div>
+                      <div className="summary-item">
+                        <div className="summary-label">Latest Report Date</div>
+                        <div className="summary-value">{formatShortDate(activeReportLogs[0].timestamp)}</div>
+                      </div>
+                      <div className="summary-item">
+                        <div className="summary-label">First Report Date</div>
+                        <div className="summary-value">{formatShortDate(activeReportLogs[activeReportLogs.length - 1].timestamp)}</div>
+                      </div>
+                      <div className="summary-item">
+                        <div className="summary-label">Abnormal Parameters Count</div>
+                        <div className="summary-value">{abnormalFindings.length}</div>
+                      </div>
+                    </div>
+
+                    <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
+                      <h4 className="glucose-chart-label color-danger">Abnormal Findings</h4>
+                      <div className="summary-list">
+                        {abnormalFindings.length > 0 ? abnormalFindings.map(item => (
+                          <div key={item.parameter} className="summary-item">
+                            <div className="summary-label">{item.parameter}</div>
+                            <div className="summary-value color-danger">{formatNumeric(item.value)}</div>
+                          </div>
+                        )) : (
+                          <div className="d-flex align-center justify-center h-100 text-muted">No abnormal findings detected.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
+                      <h4 className="glucose-chart-label" style={{ color: textColor }}>Parameter Comparison Table</h4>
+                      <div className="table-responsive">
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>Parameter</th>
+                              <th>Latest</th>
+                              <th>Previous</th>
+                              <th>Change</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeReportComparisonRows.length > 0 ? activeReportComparisonRows.map(row => (
+                              <tr key={row.parameter}>
+                                <td>{row.parameter}</td>
+                                <td>{row.latest === null ? '--' : formatNumeric(row.latest)}</td>
+                                <td>{row.previous === null ? '--' : formatNumeric(row.previous)}</td>
+                                <td>{row.change === null ? '--' : `${row.change >= 0 ? '+' : ''}${row.change.toFixed(1)}%`}</td>
+                              </tr>
+                            )) : (
+                              <tr>
+                                <td colSpan={4} className="text-center text-muted py-4">No numeric parameters detected.</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
+                      <h4 className="glucose-chart-label color-primary">Single Parameter Trend</h4>
+                      {activeReportParam ? (
+                        <>
+                          <div className="filter-group mb-3">
+                            <select
+                              className="form-control"
+                              value={activeReportParam}
+                              onChange={(e) => setSelectedParam(e.target.value)}
+                            >
+                              {activeReportParams.map(param => (
+                                <option key={param} value={param}>{param}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="summary-list" style={{ marginBottom: '1rem' }}>
+                            <div className="summary-item">
+                              <div className="summary-label">Current Value</div>
+                              <div className="summary-value">
+                                {(() => {
+                                  const values = activeReportLogs.map(report => {
+                                    const parsed = parseReportParameters(report.data);
+                                    return parsed[activeReportParam];
+                                  }).filter((value): value is number => typeof value === 'number');
+                                  return values.length ? formatNumeric(values[0]) : '--';
+                                })()}
+                              </div>
+                            </div>
+                            <div className="summary-item">
+                              <div className="summary-label">Average Value</div>
+                              <div className="summary-value">
+                                {(() => {
+                                  const values = activeReportLogs.map(report => {
+                                    const parsed = parseReportParameters(report.data);
+                                    return parsed[activeReportParam];
+                                  }).filter((value): value is number => typeof value === 'number');
+                                  return values.length ? formatNumeric(values.reduce((a, b) => a + b, 0) / values.length) : '--';
+                                })()}
+                              </div>
+                            </div>
+                            <div className="summary-item">
+                              <div className="summary-label">Highest Value</div>
+                              <div className="summary-value">{activeReportChartData ? formatNumeric(Math.max(...activeReportChartData.datasets[0].data.filter((v): v is number => typeof v === 'number'))) : '--'}</div>
+                            </div>
+                            <div className="summary-item">
+                              <div className="summary-label">Lowest Value</div>
+                              <div className="summary-value">{activeReportChartData ? formatNumeric(Math.min(...activeReportChartData.datasets[0].data.filter((v): v is number => typeof v === 'number'))) : '--'}</div>
+                            </div>
+                          </div>
+                          <div className="chart-container-large">
+                            <Line data={activeReportChartData} options={chartOptions} />
+                          </div>
+                        </>
+                      ) : (
+                        <div className="d-flex align-center justify-center h-100 text-muted">
+                          No numeric parameters found in this report type.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="glucose-chart-section" style={{ marginTop: '1.5rem' }}>
+                      <h4 className="glucose-chart-label" style={{ color: textColor }}>Report History</h4>
+                      <div className="summary-list">
+                        {activeReportLogs.slice(0, 8).map(report => (
+                          <div key={report.id} className="summary-item">
+                            <div>
+                              <div className="summary-value">{formatShortDate(report.timestamp)}</div>
+                              <div className="summary-label">{report.title}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>

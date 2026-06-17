@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Activity, Thermometer, Weight, FileText } from 'lucide-react';
 
+const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'KFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Other Reports'];
+
 interface LogModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -52,7 +54,7 @@ export const LogModal: React.FC<LogModalProps> = ({
 
   // Medical Reports State
   const [reportDate, setReportDate] = useState('');
-  const [reportType, setReportType] = useState('Blood');
+  const [reportType, setReportType] = useState('CBC');
   const [reportTitle, setReportTitle] = useState('');
   const [reportData, setReportData] = useState('');
   const [reportNotes, setReportNotes] = useState('');
@@ -122,7 +124,7 @@ export const LogModal: React.FC<LogModalProps> = ({
         setWeightNotes('');
 
         setReportDate(formatted);
-        setReportType('Blood');
+        setReportType('CBC');
         setReportTitle('');
         setReportData('');
         setReportNotes('');
@@ -563,14 +565,9 @@ export const LogModal: React.FC<LogModalProps> = ({
                   onChange={(e) => setReportType(e.target.value)}
                   required
                 >
-                  <option value="Blood">Blood Report</option>
-                  <option value="Urine">Urine Report</option>
-                  <option value="Thyroid">Thyroid Panel</option>
-                  <option value="Lipids">Cholesterol / Lipids</option>
-                  <option value="Liver">Liver Function</option>
-                  <option value="Renal">Kidney Function</option>
-                  <option value="Imaging">X-Ray / MRI / Ultrasound</option>
-                  <option value="Other">Other Lab Report</option>
+                  {REPORT_TYPE_OPTIONS.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
                 </select>
               </div>
 

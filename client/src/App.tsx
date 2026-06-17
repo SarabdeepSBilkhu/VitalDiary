@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, LineChart as ChartIcon, Calendar, Clock, Settings as SettingsIcon, 
-  HeartPulse, PlusCircle, LogOut, Sun, Moon, Sparkles, Loader2 
+  HeartPulse, PlusCircle, LogOut, Sun, Moon, Sparkles, Loader2, UserCircle2, Pill 
 } from 'lucide-react';
 import { api, getCurrentUser, removeToken } from './utils/api';
 import type { VitalsRecord, GlucoseRecord } from './utils/evaluators';
@@ -9,6 +9,8 @@ import type { WeightRecord, ReportRecord } from './utils/api';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { Dashboard } from './components/Dashboard';
+import { Profile } from './components/Profile';
+import { Medications } from './components/Medications';
 import { Analytics } from './components/Analytics';
 import { CalendarView } from './components/CalendarView';
 import { HistoryView } from './components/HistoryView';
@@ -254,6 +256,10 @@ export const App: React.FC = () => {
             onNavigate={setActiveView}
           />
         );
+      case 'profile-view':
+        return <Profile />;
+      case 'medications-view':
+        return <Medications />;
       case 'analytics-view':
         return <Analytics vitals={vitals} glucose={glucose} weights={weights} reports={reports} />;
       case 'calendar-view':
@@ -343,6 +349,22 @@ export const App: React.FC = () => {
             <LayoutDashboard size={20} />
             <span>Dashboard</span>
           </button>
+
+          <button 
+            className={`nav-item ${activeView === 'profile-view' ? 'active' : ''}`}
+            onClick={() => setActiveView('profile-view')}
+          >
+            <UserCircle2 size={20} />
+            <span>Profile</span>
+          </button>
+
+          <button 
+            className={`nav-item ${activeView === 'medications-view' ? 'active' : ''}`}
+            onClick={() => setActiveView('medications-view')}
+          >
+            <Pill size={20} />
+            <span>Medications</span>
+          </button>
           
           <button 
             className={`nav-item ${activeView === 'analytics-view' ? 'active' : ''}`}
@@ -416,6 +438,8 @@ export const App: React.FC = () => {
           <div className="header-titles">
             <h1 id="view-title">
               {activeView === 'dashboard-view' && 'Health Dashboard'}
+              {activeView === 'profile-view' && 'Profile'}
+              {activeView === 'medications-view' && 'Medications'}
               {activeView === 'analytics-view' && 'Medical Analytics'}
               {activeView === 'calendar-view' && 'Log Calendar'}
               {activeView === 'history-view' && 'Records Logs History'}
@@ -446,6 +470,22 @@ export const App: React.FC = () => {
         >
           <LayoutDashboard size={22} />
           <span>Dashboard</span>
+        </button>
+
+        <button 
+          className={`mobile-nav-item ${activeView === 'profile-view' ? 'active' : ''}`}
+          onClick={() => setActiveView('profile-view')}
+        >
+          <UserCircle2 size={22} />
+          <span>Profile</span>
+        </button>
+
+        <button 
+          className={`mobile-nav-item ${activeView === 'medications-view' ? 'active' : ''}`}
+          onClick={() => setActiveView('medications-view')}
+        >
+          <Pill size={22} />
+          <span>Medications</span>
         </button>
         
         <button 
