@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
-import { parseReportParameters } from './Analytics';
+import { parseReportParameters, getLatestReportsByType, getReportTypeFromRecord } from './Analytics';
 
 const fmtDT = (ts: string) => {
   const d = new Date(ts);
@@ -182,11 +182,9 @@ export const Settings: React.FC<SettingsProps> = ({
     const vitals30 = filterRecent(vitals);
     const glucose30 = filterRecent(glucose);
     const weights30 = filterRecent(weights);
-    const latestReport = reports.length > 0
-      ? [...reports].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
-      : null;
+    const latestReportsByType = getLatestReportsByType(reports);
 
-    const hasContent = vitals30.length > 0 || glucose30.length > 0 || weights30.length > 0 || latestReport !== null
+    const hasContent = vitals30.length > 0 || glucose30.length > 0 || weights30.length > 0 || latestReportsByType.length > 0
       || [profile.name, profile.age, profile.gender, profile.bloodGroup, profile.height, profile.allergies, profile.emergencyContact]
         .some(v => v?.trim());
 
@@ -412,27 +410,18 @@ export const Settings: React.FC<SettingsProps> = ({
 
     y += 8;
 
-    // ─── Section 4: Latest medical report ────────────────────────────────────
+    // ─── Section 4: Latest medical reports by type ───────────────────────────
 
-    const drawLatestReportHeader = () => {
+    const drawLabReportsSectionHeader = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(50, 50, 50);
-      doc.text("4. LATEST MEDICAL LAB REPORT", 14, y);
+      doc.text("4. LATEST MEDICAL LAB REPORTS (BY TYPE)", 14, y);
       y += 8;
     };
 
-    ensurePageSpace(30);
-    drawLatestReportHeader();
-
-    if (!latestReport) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(60, 60, 60);
-      doc.text("No medical reports saved.", 16, y);
-      y += 10;
-    } else {
-      const r = latestReport;
+    const drawReportRecord = (r: ReportRecord) => {
+      const reportType = getReportTypeFromRecord(r);
       ensurePageSpace(30);
 
       doc.setDrawColor(210, 105, 30);
@@ -442,8 +431,7 @@ export const Settings: React.FC<SettingsProps> = ({
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(80, 45, 10);
-      doc.text(`${fmtDT(r.timestamp)}`, 16, y + 5.5);
-      doc.text(r.report_type, 150, y + 5.5);
+      doc.text(`${reportType}  —  ${fmtDT(r.timestamp)}`, 16, y + 5.5);
       y += 12;
 
       const params = parseReportParameters(r.data || '');
@@ -513,6 +501,28 @@ export const Settings: React.FC<SettingsProps> = ({
           y += 4.5;
         });
       }
+
+      y += 6;
+    };
+
+    ensurePageSpace(30);
+    drawLabReportsSectionHeader();
+
+    if (latestReportsByType.length === 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(60, 60, 60);
+      doc.text("No medical reports saved.", 16, y);
+      y += 10;
+    } else {
+      latestReportsByType.forEach((r, index) => {
+        if (index > 0 && y + 30 > 280) {
+          doc.addPage();
+          y = 20;
+          drawLabReportsSectionHeader();
+        }
+        drawReportRecord(r);
+      });
     }
 
     // ─── Disclaimer page ─────────────────────────────────────────────────────
@@ -736,7 +746,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
               <button className="btn btn-outline justify-between" onClick={() => void handleExportPDF()}>
                 <span className="d-flex align-center gap-2"><FileText size={18} className="color-danger" /> Export Medical PDF Report</span>
-                <span className="text-xs text-muted">30-day summary + latest labs</span>
+                <span className="text-xs text-muted">30-day summary + latest labs by type</span>
               </button>
 
               <div className="border-top my-2 pt-3">

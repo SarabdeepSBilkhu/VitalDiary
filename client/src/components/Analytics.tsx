@@ -56,7 +56,9 @@ const PARAM_COLORS = [
 
 const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Other Reports'] as const;
 
-type ReportType = typeof REPORT_TYPE_OPTIONS[number];
+export type ReportType = typeof REPORT_TYPE_OPTIONS[number];
+
+export { REPORT_TYPE_OPTIONS };
 
 const formatShortDate = (ts: string) => {
   const d = new Date(ts);
@@ -76,7 +78,24 @@ const normalizeReportType = (value: string): ReportType => {
   return 'Other Reports';
 };
 
-const getReportTypeFromRecord = (report: ReportRecord): ReportType => normalizeReportType(report.report_type || report.data || '');
+export const getReportTypeFromRecord = (report: ReportRecord): ReportType =>
+  normalizeReportType(report.report_type || report.data || '');
+
+export function getLatestReportsByType(reports: ReportRecord[]): ReportRecord[] {
+  const latestByType = new Map<ReportType, ReportRecord>();
+
+  for (const report of reports) {
+    const type = getReportTypeFromRecord(report);
+    const existing = latestByType.get(type);
+    if (!existing || new Date(report.timestamp).getTime() > new Date(existing.timestamp).getTime()) {
+      latestByType.set(type, report);
+    }
+  }
+
+  return REPORT_TYPE_OPTIONS
+    .map(type => latestByType.get(type))
+    .filter((report): report is ReportRecord => report !== undefined);
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
