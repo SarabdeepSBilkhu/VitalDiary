@@ -458,7 +458,12 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
       <div className="analytics-controls panel panel-glass mb-4">
         <div className="filters-row">
           <div className="filter-group">
-            <label htmlFor="analytics-metric-select">Select Metric</label>
+            <label
+                htmlFor="analytics-metric-select"
+                style={{ display: 'block', marginBottom: '8px' }}
+            >
+                Select Metric
+            </label>
             <select
               id="analytics-metric-select"
               className="form-control"
@@ -475,7 +480,12 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
           </div>
 
           <div className="filter-group">
-            <label htmlFor="analytics-timeframe-select">Time Range</label>
+            <label
+                htmlFor="analytics-timeframe-select"
+                style={{ display: 'block', marginBottom: '8px', marginTop: '8px' }}
+            >
+                Time Range
+            </label>
             <select
               id="analytics-timeframe-select"
               className="form-control"
