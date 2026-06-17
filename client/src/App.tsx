@@ -3,7 +3,7 @@ import {
   LayoutDashboard, LineChart as ChartIcon, Calendar, Clock, Settings as SettingsIcon, 
   HeartPulse, PlusCircle, LogOut, Sun, Moon, Sparkles, Loader2, UserCircle2, Pill 
 } from 'lucide-react';
-import { api, getCurrentUser, removeToken, migrateProfileAndMedicationsFromLocalStorage } from './utils/api';
+import { api, getCurrentUser, removeToken } from './utils/api';
 import type { VitalsRecord, GlucoseRecord } from './utils/evaluators';
 import type { WeightRecord, ReportRecord } from './utils/api';
 import { Login } from './components/Login';
@@ -104,16 +104,6 @@ export const App: React.FC = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const migration = await migrateProfileAndMedicationsFromLocalStorage();
-      if (migration.profileMigrated || migration.medicationsMigrated > 0) {
-        const parts: string[] = [];
-        if (migration.profileMigrated) parts.push('profile');
-        if (migration.medicationsMigrated > 0) {
-          parts.push(`${migration.medicationsMigrated} medication${migration.medicationsMigrated === 1 ? '' : 's'}`);
-        }
-        showToast(`Migrated ${parts.join(' and ')} from this device to your account.`, 'success');
-      }
-
       const [vitalsData, glucoseData, weightData, reportsData] = await Promise.all([
         api.getVitals(),
         api.getGlucose(),

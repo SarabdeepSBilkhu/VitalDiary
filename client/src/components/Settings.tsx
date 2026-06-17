@@ -209,18 +209,35 @@ export const Settings: React.FC<SettingsProps> = ({
     };
 
     const drawSummaryBox = (title: string, lines: string[]) => {
-      const boxHeight = 10 + lines.length * 6;
-      ensurePageSpace(boxHeight + 4);
-      doc.setFillColor(242, 245, 248);
-      doc.rect(14, y, 182, boxHeight, 'F');
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.setTextColor(50, 50, 50);
-      doc.text(title, 18, y + 8);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      lines.forEach((line, i) => doc.text(line, 18, y + 16 + i * 6));
-      y += boxHeight + 8;
+        const boxWidth = 182;
+        const padding = 6;
+
+        const wrappedLines = lines.flatMap(line =>
+            doc.splitTextToSize(line, boxWidth - padding * 2)
+        );
+
+        const boxHeight = 14 + wrappedLines.length * 6;
+
+        ensurePageSpace(boxHeight + 4);
+
+        doc.setFillColor(242, 245, 248);
+        doc.rect(14, y, boxWidth, boxHeight, 'F');
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(50, 50, 50);
+        doc.text(title, 14 + padding, y + 8);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+
+        let lineY = y + 16;
+        wrappedLines.forEach(line => {
+            doc.text(line, 14 + padding, lineY);
+            lineY += 6;
+        });
+
+        y += boxHeight + 8;
     };
 
     const drawHeader = (title: string, color: [number, number, number], cols: { name: string; x: number }[]) => {
