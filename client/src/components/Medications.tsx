@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pill, Plus, X, Edit2, Trash2 } from 'lucide-react';
 
-type TimeOfDay = 'morning' | 'afternoon' | 'night';
+type TimeOfDay = 'morning' | 'afternoon' | 'night' | 'sos';
 
 type Medication = {
   id: string;
@@ -10,7 +10,7 @@ type Medication = {
   instructions: string;
 };
 
-const TIME_OF_DAY_OPTIONS: TimeOfDay[] = ['morning', 'afternoon', 'night'];
+const TIME_OF_DAY_OPTIONS: TimeOfDay[] = ['morning', 'afternoon', 'night', 'sos'];
 
 const TIME_OF_DAY_GROUPS: TimeOfDay[][] = [
   ['morning'],
@@ -20,6 +20,7 @@ const TIME_OF_DAY_GROUPS: TimeOfDay[][] = [
   ['morning', 'afternoon'],
   ['afternoon', 'night'],
   ['morning', 'afternoon', 'night'],
+  ['sos'],
 ];
 
 const normalizeTimeOfDay = (value: unknown): TimeOfDay[] => {
@@ -31,17 +32,21 @@ const normalizeTimeOfDay = (value: unknown): TimeOfDay[] => {
     return [value];
   }
 
+  if (value === 'sos') {
+    return ['sos'];
+  }
+
   return ['morning'];
 };
 
 const formatTimeOfDay = (timeOfDay: TimeOfDay[]) =>
-  timeOfDay.map(time => time.charAt(0).toUpperCase() + time.slice(1)).join(', ');
+  timeOfDay.map(time => (time === 'sos' ? 'SOS' : time.charAt(0).toUpperCase() + time.slice(1))).join(', ');
 
 const getTimeOfDayKey = (timeOfDay: TimeOfDay[]) =>
   [...timeOfDay].sort().join('+');
 
 const formatTimeOfDayGroup = (timeOfDay: TimeOfDay[]) =>
-  timeOfDay.map(time => time.charAt(0).toUpperCase() + time.slice(1)).join(' + ');
+  timeOfDay.map(time => (time === 'sos' ? 'SOS' : time.charAt(0).toUpperCase() + time.slice(1))).join(' + ');
 
 const MEDICATIONS_KEY = 'vital_diary_medications';
 
@@ -248,7 +253,7 @@ export const Medications: React.FC = () => {
                         onChange={() => toggleTimeOfDay(time)}
                         className="radio-input"
                       />
-                      <span className="radio-text">{time.charAt(0).toUpperCase() + time.slice(1)}</span>
+                      <span className="radio-text">{time === 'sos' ? 'SOS' : time.charAt(0).toUpperCase() + time.slice(1)}</span>
                     </label>
                   ))}
                 </div>
