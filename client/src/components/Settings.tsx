@@ -6,7 +6,7 @@ import {
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
-import type { WeightRecord, ReportRecord } from '../utils/api';
+import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
 import { parseReportParameters } from './Analytics';
 
@@ -14,6 +14,25 @@ const fmtDT = (ts: string) => {
   const d = new Date(ts);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' +
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+const PDF_WINDOW_DAYS = 30;
+
+const isWithinLastDays = (timestamp: string, days: number) => {
+  const now = new Date();
+  const logDate = new Date(timestamp);
+  const diffDays = Math.ceil(Math.abs(now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
+  return diffDays <= days;
+};
+
+const filterRecent = <T extends { timestamp: string }>(records: T[], days = PDF_WINDOW_DAYS) =>
+  records
+    .filter(r => isWithinLastDays(r.timestamp, days))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+const displayOrNA = (value: string | number | undefined | null) => {
+  if (value === undefined || value === null || value === '') return 'N/A';
+  return String(value);
 };
 
 interface SettingsProps {
@@ -150,66 +169,64 @@ export const Settings: React.FC<SettingsProps> = ({
   };
 
   // 3. Export PDF
-  const handleExportPDF = () => {
-    if (allLogs.length === 0) {
-      showToast('No data available to export.', 'warning');
+  const handleExportPDF = async () => {
+    let profile: ProfileRecord = {
+      name: '', age: '', gender: '', bloodGroup: '', height: '', allergies: '', emergencyContact: '',
+    };
+    try {
+      profile = await api.getProfile();
+    } catch {
+      // Continue with empty profile if fetch fails
+    }
+
+    const vitals30 = filterRecent(vitals);
+    const glucose30 = filterRecent(glucose);
+    const weights30 = filterRecent(weights);
+    const latestReport = reports.length > 0
+      ? [...reports].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+      : null;
+
+    const hasContent = vitals30.length > 0 || glucose30.length > 0 || weights30.length > 0 || latestReport !== null
+      || [profile.name, profile.age, profile.gender, profile.bloodGroup, profile.height, profile.allergies, profile.emergencyContact]
+        .some(v => v?.trim());
+
+    if (!hasContent) {
+      showToast('No profile or health data available to export.', 'warning');
       return;
     }
+
+    const periodEnd = new Date();
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - PDF_WINDOW_DAYS);
+    const periodLabel = `${periodStart.toLocaleDateString()} – ${periodEnd.toLocaleDateString()}`;
 
     const doc = new jsPDF();
     let y = 20;
 
-    // Header
-    doc.setFillColor(34, 49, 63);
-    doc.rect(0, 0, 220, 35, 'F');
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(255, 255, 255);
-    doc.text("VITALDIARY HEALTH REPORT", 14, 23);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`User Account: ${userEmail}  |  Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
-    y = 50;
+    const ensurePageSpace = (needed: number) => {
+      if (y + needed > 280) {
+        doc.addPage();
+        y = 20;
+      }
+    };
 
-    // Averages Subcard
-    doc.setFillColor(242, 245, 248);
-    doc.rect(14, y, 182, 35, 'F');
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(50, 50, 50);
-    doc.text("REPORT SUMMARY & STATISTICAL AVERAGES (ALL RECORDS)", 18, y + 8);
-    const totalV = vitals.length;
-    const avgSys = totalV ? Math.round(vitals.reduce((a, b) => a + b.systolic, 0) / totalV) : 0;
-    const avgDia = totalV ? Math.round(vitals.reduce((a, b) => a + b.diastolic, 0) / totalV) : 0;
-    const avgHr = totalV ? Math.round(vitals.reduce((a, b) => a + b.hr, 0) / totalV) : 0;
-    const glFasting = glucose.filter(g => g.context === 'fasting');
-    const avgFast = glFasting.length ? Math.round(glFasting.reduce((a, b) => a + b.value, 0) / glFasting.length) : 0;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`Average Blood Pressure:  ${avgSys ? `${avgSys}/${avgDia} mmHg` : 'N/A'}`, 18, y + 18);
-    doc.text(`Average Heart Rate:      ${avgHr ? `${avgHr} bpm` : 'N/A'}`, 18, y + 24);
-    doc.text(`Average Fasting Glucose:  ${avgFast ? `${avgFast} mg/dL` : 'N/A'}`, 18, y + 30);
-    doc.text(`Total Records Added:      ${allLogs.length} entries`, 110, y + 18);
-    y += 50;
-
-    // Report Information section
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(50, 50, 50);
-    doc.text("REPORT INFORMATION", 14, y);
-    y += 8;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`Patient Account: ${userEmail}`, 14, y);
-    y += 5;
-    doc.text(`Generated On: ${new Date().toLocaleString()}`, 14, y);
-    y += 5;
-    doc.text(`Total Records: ${allLogs.length}`, 14, y);
-    y += 10;
-
-    // ─── Section header helpers ──────────────────────────────────────────────
+    const drawSummaryBox = (title: string, lines: string[]) => {
+      const boxHeight = 10 + lines.length * 6;
+      ensurePageSpace(boxHeight + 4);
+      doc.setFillColor(242, 245, 248);
+      doc.rect(14, y, 182, boxHeight, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(50, 50, 50);
+      doc.text(title, 18, y + 8);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      lines.forEach((line, i) => doc.text(line, 18, y + 16 + i * 6));
+      y += boxHeight + 8;
+    };
 
     const drawHeader = (title: string, color: [number, number, number], cols: { name: string; x: number }[]) => {
+      ensurePageSpace(20);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(50, 50, 50);
@@ -229,22 +246,49 @@ export const Settings: React.FC<SettingsProps> = ({
     const drawContinuationHeader = (title: string, color: [number, number, number], cols: { name: string; x: number }[]) => {
       doc.addPage();
       y = 20;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(50, 50, 50);
-      doc.text(title, 14, y);
-      y += 6;
-      doc.setFillColor(...color);
-      doc.rect(14, y, 182, 7, 'F');
-      doc.setFontSize(8);
-      doc.setTextColor(255, 255, 255);
-      cols.forEach(c => doc.text(c.name, c.x, y + 5));
-      y += 12;
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(60, 60, 60);
+      drawHeader(title, color, cols);
     };
 
-    // ─── Section 1: Vitals ───────────────────────────────────────────────────
+    // Header
+    doc.setFillColor(34, 49, 63);
+    doc.rect(0, 0, 220, 35, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text("VITALDIARY HEALTH REPORT", 14, 23);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}  |  Reporting period: Last ${PDF_WINDOW_DAYS} days`, 14, 30);
+    y = 50;
+
+    // Patient summary
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(50, 50, 50);
+    doc.text("PATIENT SUMMARY", 14, y);
+    y += 8;
+
+    const patientLines = [
+      `Name:               ${displayOrNA(profile.name)}`,
+      `Age / Gender:       ${displayOrNA(profile.age)} / ${displayOrNA(profile.gender)}`,
+      `Blood Group:        ${displayOrNA(profile.bloodGroup)}`,
+      `Height:             ${displayOrNA(profile.height)}`,
+      `Allergies:          ${displayOrNA(profile.allergies)}`,
+      `Emergency Contact:  ${displayOrNA(profile.emergencyContact)}`,
+      `Account Email:      ${userEmail}`,
+      `Report Period:      ${periodLabel}`,
+    ];
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    patientLines.forEach(line => {
+      ensurePageSpace(6);
+      doc.text(line, 14, y);
+      y += 6;
+    });
+    y += 8;
+
+    // ─── Section 1: 30-day vitals ────────────────────────────────────────────
 
     const vitalsCols = [
       { name: "Date & Time", x: 16 }, { name: "Sys / Dia", x: 60 },
@@ -252,14 +296,27 @@ export const Settings: React.FC<SettingsProps> = ({
       { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
     ];
 
-    y += 10;
-    drawHeader("1. BLOOD PRESSURE & HEART RATE LOGS", [79, 93, 117], vitalsCols);
+    const avgSys30 = vitals30.length ? Math.round(vitals30.reduce((a, b) => a + b.systolic, 0) / vitals30.length) : 0;
+    const avgDia30 = vitals30.length ? Math.round(vitals30.reduce((a, b) => a + b.diastolic, 0) / vitals30.length) : 0;
+    const avgHr30 = vitals30.length ? Math.round(vitals30.reduce((a, b) => a + b.hr, 0) / vitals30.length) : 0;
+    const spo2Readings = vitals30.filter(v => v.spo2);
+    const avgSpo230 = spo2Readings.length
+      ? Math.round(spo2Readings.reduce((a, b) => a + (b.spo2 || 0), 0) / spo2Readings.length)
+      : 0;
 
-    if (vitals.length === 0) {
-      doc.text("No vitals data logs recorded.", 16, y); y += 10;
+    drawSummaryBox(`30-DAY VITALS SUMMARY (${vitals30.length} readings)`, [
+      `Average Blood Pressure:  ${avgSys30 ? `${avgSys30}/${avgDia30} mmHg` : 'N/A'}`,
+      `Average Heart Rate:      ${avgHr30 ? `${avgHr30} bpm` : 'N/A'}`,
+      `Average SpO2:            ${avgSpo230 ? `${avgSpo230}%` : 'N/A'}`,
+    ]);
+
+    drawHeader("1. BLOOD PRESSURE & HEART RATE (LAST 30 DAYS)", [79, 93, 117], vitalsCols);
+
+    if (vitals30.length === 0) {
+      doc.text("No vitals recorded in the last 30 days.", 16, y); y += 10;
     } else {
-      vitals.forEach(v => {
-        if (y + 7 > 280) drawContinuationHeader("1. BLOOD PRESSURE & HEART RATE LOGS (Cont.)", [79, 93, 117], vitalsCols);
+      vitals30.forEach(v => {
+        if (y + 7 > 280) drawContinuationHeader("1. BLOOD PRESSURE & HEART RATE (Cont.)", [79, 93, 117], vitalsCols);
         doc.setFontSize(8);
         const bpStatus = evaluateBP(v.systolic, v.diastolic).status
           .replace("Stage 1 Hypertension", "Stage 1 HTN")
@@ -278,7 +335,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
     y += 8;
 
-    // ─── Section 2: Glucose ──────────────────────────────────────────────────
+    // ─── Section 2: 30-day glucose ───────────────────────────────────────────
 
     const glucoseCols = [
       { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 65 },
@@ -286,14 +343,27 @@ export const Settings: React.FC<SettingsProps> = ({
       { name: "Diet Notes", x: 165 }
     ];
 
-    if (y + 20 > 280) { doc.addPage(); y = 20; }
-    drawHeader("2. BLOOD GLUCOSE LOGS", [115, 93, 120], glucoseCols);
+    const glFasting30 = glucose30.filter(g => g.context === 'fasting');
+    const avgFast30 = glFasting30.length
+      ? Math.round(glFasting30.reduce((a, b) => a + b.value, 0) / glFasting30.length)
+      : 0;
+    const glPostMeal30 = glucose30.filter(g => g.context === 'post-meal');
+    const avgPostMeal30 = glPostMeal30.length
+      ? Math.round(glPostMeal30.reduce((a, b) => a + b.value, 0) / glPostMeal30.length)
+      : 0;
 
-    if (glucose.length === 0) {
-      doc.text("No glucose readings logs recorded.", 16, y); y += 10;
+    drawSummaryBox(`30-DAY GLUCOSE SUMMARY (${glucose30.length} readings)`, [
+      `Average Fasting Glucose:   ${avgFast30 ? `${avgFast30} mg/dL` : 'N/A'}`,
+      `Average Post-Meal Glucose: ${avgPostMeal30 ? `${avgPostMeal30} mg/dL` : 'N/A'}`,
+    ]);
+
+    drawHeader("2. BLOOD GLUCOSE (LAST 30 DAYS)", [115, 93, 120], glucoseCols);
+
+    if (glucose30.length === 0) {
+      doc.text("No glucose readings recorded in the last 30 days.", 16, y); y += 10;
     } else {
-      glucose.forEach(g => {
-        if (y + 7 > 280) drawContinuationHeader("2. BLOOD GLUCOSE LOGS (Cont.)", [115, 93, 120], glucoseCols);
+      glucose30.forEach(g => {
+        if (y + 7 > 280) drawContinuationHeader("2. BLOOD GLUCOSE (Cont.)", [115, 93, 120], glucoseCols);
         doc.setFontSize(8);
         const noteLines = doc.splitTextToSize(g.notes || '', 20).slice(0, 2);
         doc.text(fmtDT(g.timestamp), 16, y);
@@ -307,20 +377,30 @@ export const Settings: React.FC<SettingsProps> = ({
 
     y += 8;
 
-    // ─── Section 3: Weight ───────────────────────────────────────────────────
+    // ─── Section 3: 30-day weight ────────────────────────────────────────────
 
     const weightCols = [
       { name: "Date & Time", x: 16 }, { name: "Weight (kg)", x: 80 }, { name: "Notes", x: 130 }
     ];
 
-    if (y + 20 > 280) { doc.addPage(); y = 20; }
-    drawHeader("3. WEIGHT TRACKER LOGS", [34, 139, 34], weightCols);
+    const latestWeight30 = weights30[0]?.value;
+    const oldestWeight30 = weights30.length > 0 ? weights30[weights30.length - 1].value : null;
+    const weightChange30 = latestWeight30 != null && oldestWeight30 != null && weights30.length > 1
+      ? `${(latestWeight30 - oldestWeight30).toFixed(1)} kg`
+      : 'N/A';
 
-    if (weights.length === 0) {
-      doc.text("No weight data logs recorded.", 16, y); y += 10;
+    drawSummaryBox(`30-DAY WEIGHT SUMMARY (${weights30.length} readings)`, [
+      `Latest Weight:   ${latestWeight30 != null ? `${latestWeight30} kg` : 'N/A'}`,
+      `Period Change:   ${weightChange30}`,
+    ]);
+
+    drawHeader("3. WEIGHT TRACKER (LAST 30 DAYS)", [34, 139, 34], weightCols);
+
+    if (weights30.length === 0) {
+      doc.text("No weight readings recorded in the last 30 days.", 16, y); y += 10;
     } else {
-      weights.forEach(w => {
-        if (y + 7 > 280) drawContinuationHeader("3. WEIGHT TRACKER LOGS (Cont.)", [34, 139, 34], weightCols);
+      weights30.forEach(w => {
+        if (y + 7 > 280) drawContinuationHeader("3. WEIGHT TRACKER (Cont.)", [34, 139, 34], weightCols);
         doc.setFontSize(8);
         const noteLines = doc.splitTextToSize(w.notes || '', 40).slice(0, 2);
         doc.text(fmtDT(w.timestamp), 16, y);
@@ -332,123 +412,107 @@ export const Settings: React.FC<SettingsProps> = ({
 
     y += 8;
 
-    // ─── Section 4: Medical Reports ──────────────────────────────────────────
+    // ─── Section 4: Latest medical report ────────────────────────────────────
 
-    const ensurePageSpace = (needed: number) => {
-      if (y + needed > 280) {
-        doc.addPage();
-        y = 20;
-      }
-    };
-
-    const drawReportSectionHeader = () => {
+    const drawLatestReportHeader = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(50, 50, 50);
-      doc.text("4. MEDICAL LAB REPORTS", 14, y);
+      doc.text("4. LATEST MEDICAL LAB REPORT", 14, y);
       y += 8;
     };
 
-    if (y + 20 > 280) { doc.addPage(); y = 20; }
-    drawReportSectionHeader();
+    ensurePageSpace(30);
+    drawLatestReportHeader();
 
-    if (reports.length === 0) {
+    if (!latestReport) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(60, 60, 60);
       doc.text("No medical reports saved.", 16, y);
       y += 10;
     } else {
-      reports.forEach((r, index) => {
-        if (index > 0 && y + 30 > 280) {
-          doc.addPage();
-          y = 20;
-          drawReportSectionHeader();
-        } else {
-          ensurePageSpace(30);
-        }
+      const r = latestReport;
+      ensurePageSpace(30);
 
-        doc.setDrawColor(210, 105, 30);
-        doc.setLineWidth(0.3);
-        doc.setFillColor(255, 248, 240);
-        doc.roundedRect(14, y, 182, 8, 1, 1, 'FD');
+      doc.setDrawColor(210, 105, 30);
+      doc.setLineWidth(0.3);
+      doc.setFillColor(255, 248, 240);
+      doc.roundedRect(14, y, 182, 8, 1, 1, 'FD');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(80, 45, 10);
+      doc.text(`${fmtDT(r.timestamp)}`, 16, y + 5.5);
+      doc.text(r.report_type, 150, y + 5.5);
+      y += 12;
+
+      const params = parseReportParameters(r.data || '');
+      const paramKeys = Object.keys(params);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(50, 50, 50);
+      doc.text("Lab Results", 16, y);
+      y += 5;
+
+      if (paramKeys.length > 0) {
+        doc.setFillColor(210, 105, 30);
+        doc.rect(16, y, 176, 6, 'F');
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(80, 45, 10);
-        doc.text(`${fmtDT(r.timestamp)}`, 16, y + 5.5);
-        doc.text(r.report_type, 150, y + 5.5);
-        y += 12;
+        doc.setFontSize(7);
+        doc.setTextColor(255, 255, 255);
+        doc.text("Parameter", 18, y + 4.2);
+        doc.text("Value", 115, y + 4.2);
+        y += 8;
 
-        const params = parseReportParameters(r.data || '');
-        const paramKeys = Object.keys(params);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(60, 60, 60);
+        paramKeys.forEach((key, paramIndex) => {
+          ensurePageSpace(6);
+          if (paramIndex % 2 === 0) {
+            doc.setFillColor(248, 248, 248);
+            doc.rect(16, y - 3.5, 176, 5.5, 'F');
+          }
+          doc.text(key, 18, y);
+          doc.text(String(params[key]), 115, y);
+          y += 5.5;
+        });
+      } else if (r.data?.trim()) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(60, 60, 60);
+        const resultLines = doc.splitTextToSize(r.data.trim(), 176);
+        resultLines.forEach((line: string) => {
+          ensurePageSpace(5);
+          doc.text(line, 16, y);
+          y += 4.5;
+        });
+      } else {
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text("No lab results recorded.", 16, y);
+        y += 5;
+      }
 
+      if (r.notes?.trim()) {
+        y += 2;
+        ensurePageSpace(10);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.setTextColor(50, 50, 50);
-        doc.text("Lab Results", 16, y);
+        doc.text("Notes / Observations", 16, y);
         y += 5;
-
-        if (paramKeys.length > 0) {
-          doc.setFillColor(210, 105, 30);
-          doc.rect(16, y, 176, 6, 'F');
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(7);
-          doc.setTextColor(255, 255, 255);
-          doc.text("Parameter", 18, y + 4.2);
-          doc.text("Value", 115, y + 4.2);
-          y += 8;
-
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(60, 60, 60);
-          paramKeys.forEach((key, paramIndex) => {
-            ensurePageSpace(6);
-            if (paramIndex % 2 === 0) {
-              doc.setFillColor(248, 248, 248);
-              doc.rect(16, y - 3.5, 176, 5.5, 'F');
-            }
-            doc.text(key, 18, y);
-            doc.text(String(params[key]), 115, y);
-            y += 5.5;
-          });
-        } else if (r.data?.trim()) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(60, 60, 60);
-          const resultLines = doc.splitTextToSize(r.data.trim(), 176);
-          resultLines.forEach((line: string) => {
-            ensurePageSpace(5);
-            doc.text(line, 16, y);
-            y += 4.5;
-          });
-        } else {
-          doc.setFont("helvetica", "italic");
-          doc.setFontSize(8);
-          doc.setTextColor(120, 120, 120);
-          doc.text("No lab results recorded.", 16, y);
-          y += 5;
-        }
-
-        if (r.notes?.trim()) {
-          y += 2;
-          ensurePageSpace(10);
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(8);
-          doc.setTextColor(50, 50, 50);
-          doc.text("Notes / Observations", 16, y);
-          y += 5;
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor(60, 60, 60);
-          const noteLines = doc.splitTextToSize(r.notes.trim(), 176);
-          noteLines.forEach((line: string) => {
-            ensurePageSpace(5);
-            doc.text(line, 16, y);
-            y += 4.5;
-          });
-        }
-
-        y += 6;
-      });
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(60, 60, 60);
+        const noteLines = doc.splitTextToSize(r.notes.trim(), 176);
+        noteLines.forEach((line: string) => {
+          ensurePageSpace(5);
+          doc.text(line, 16, y);
+          y += 4.5;
+        });
+      }
     }
 
     // ─── Disclaimer page ─────────────────────────────────────────────────────
@@ -670,9 +734,9 @@ export const Settings: React.FC<SettingsProps> = ({
                 <span className="text-xs text-muted">SheetJS .xlsx format</span>
               </button>
 
-              <button className="btn btn-outline justify-between" onClick={handleExportPDF}>
+              <button className="btn btn-outline justify-between" onClick={() => void handleExportPDF()}>
                 <span className="d-flex align-center gap-2"><FileText size={18} className="color-danger" /> Export Medical PDF Report</span>
-                <span className="text-xs text-muted">Print Ready Format</span>
+                <span className="text-xs text-muted">30-day summary + latest labs</span>
               </button>
 
               <div className="border-top my-2 pt-3">
