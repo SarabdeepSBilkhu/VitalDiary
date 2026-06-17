@@ -54,7 +54,7 @@ const PARAM_COLORS = [
   'hsl(310, 70%, 55%)',
 ];
 
-const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'KFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Other Reports'] as const;
+const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Other Reports'] as const;
 
 type ReportType = typeof REPORT_TYPE_OPTIONS[number];
 
@@ -69,14 +69,14 @@ const normalizeReportType = (value: string): ReportType => {
   const lower = (value || '').toLowerCase();
   if (lower.includes('cbc')) return 'CBC';
   if (lower.includes('lft')) return 'LFT';
-  if (lower.includes('kft')) return 'KFT';
+  if (lower.includes('rft')) return 'RFT';
   if (lower.includes('lipid')) return 'Lipid Profile';
   if (lower.includes('thyroid')) return 'Thyroid Profile';
   if (lower.includes('hba1c')) return 'HbA1c';
   return 'Other Reports';
 };
 
-const getReportTypeFromRecord = (report: ReportRecord): ReportType => normalizeReportType(report.report_type || report.title || report.data || '');
+const getReportTypeFromRecord = (report: ReportRecord): ReportType => normalizeReportType(report.report_type || report.data || '');
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     const groups: Record<ReportType, ReportRecord[]> = {
       CBC: [],
       LFT: [],
-      KFT: [],
+      RFT: [],
       'Lipid Profile': [],
       'Thyroid Profile': [],
       HbA1c: [],
@@ -698,7 +698,6 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                           <div key={report.id} className="summary-item">
                             <div>
                               <div className="summary-value">{formatShortDate(report.timestamp)}</div>
-                              <div className="summary-label">{report.title}</div>
                             </div>
                           </div>
                         ))}

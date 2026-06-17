@@ -65,7 +65,7 @@ export const Settings: React.FC<SettingsProps> = ({
         csvContent += `Weight,${w.timestamp},,,,,,,,${w.value},,,,${(w.notes || '').replace(/"/g, '""')}\r\n`;
       } else if (type === 'reports') {
         const r = log as ReportRecord;
-        csvContent += `Report,${r.timestamp},,,,,,,,,,${r.report_type},"${r.title.replace(/"/g, '""')}","${(r.data || '').replace(/"/g, '""')}","${(r.notes || '').replace(/"/g, '""')}"\r\n`;
+        csvContent += `Report,${r.timestamp},,,,,,,,,,${r.report_type},"${(r.data || '').replace(/"/g, '""')}","${(r.notes || '').replace(/"/g, '""')}"\r\n`;
       }
     });
 
@@ -132,7 +132,6 @@ export const Settings: React.FC<SettingsProps> = ({
       const reportsData = reports.map(r => ({
         "Date & Time": fmtDT(r.timestamp),
         "Report Type": r.report_type,
-        "Title": r.title,
         "Lab Results": r.data || '',
         "Notes": r.notes || ''
       }));
@@ -348,12 +347,10 @@ export const Settings: React.FC<SettingsProps> = ({
       reports.forEach(r => {
         if (y + 7 > 280) drawContinuationHeader("4. MEDICAL LAB REPORTS (Cont.)", [210, 105, 30], reportsCols);
         doc.setFontSize(8);
-        const titleLines = doc.splitTextToSize(r.title || '', 35).slice(0, 2);
         const noteLines = doc.splitTextToSize(r.notes || '', 35).slice(0, 2);
         doc.text(fmtDT(r.timestamp), 16, y);
         doc.text(r.report_type, 60, y);
-        doc.text(titleLines, 90, y);
-        doc.text(noteLines, 140, y);
+        doc.text(noteLines, 90, y);
         y += 7;
       });
     }

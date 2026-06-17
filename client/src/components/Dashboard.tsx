@@ -286,9 +286,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="card-unit">files</span>
           </div>
           <div className="card-footer">
-            <span className="status-indicator status-warning capitalize" style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {latestReport ? latestReport.title : 'None Logged'}
-            </span>
             <span className="time-stamp" id="time-report">
               {latestReport ? fmtDT(latestReport.timestamp) : '--'}
             </span>
@@ -468,7 +465,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <span className="text-sm text-secondary">{reportLog.report_type}</span>
                       </div>
                     );
-                    valueLabel = <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}><strong>{reportLog.title}</strong></span>;
                     badgeText = 'Saved';
                     badgeClass = 'status-info';
                   }

@@ -318,9 +318,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <div className="calendar-detail-values" style={{ fontWeight: 600 }}>
-                          {reportLog.title}
-                        </div>
                         {reportLog.data && (
                           <div className="text-sm text-secondary mt-1 font-monospace" style={{ whiteSpace: 'pre-wrap', padding: '0.25rem', background: 'rgba(0,0,0,0.05)', borderRadius: '4px' }}>
                             {reportLog.data}

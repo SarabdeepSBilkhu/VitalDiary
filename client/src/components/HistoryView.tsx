@@ -244,7 +244,6 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         </span>
                       </div>
                     );
-                    valueLabel = <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}><strong>{reportLog.title}</strong></span>;
                     badgeText = 'Saved';
                     badgeClass = 'status-info';
                   }
