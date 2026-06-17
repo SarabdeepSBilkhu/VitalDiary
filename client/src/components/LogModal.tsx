@@ -55,7 +55,6 @@ export const LogModal: React.FC<LogModalProps> = ({
   // Medical Reports State
   const [reportDate, setReportDate] = useState('');
   const [reportType, setReportType] = useState('CBC');
-  const [reportTitle, setReportTitle] = useState('');
   const [reportData, setReportData] = useState('');
   const [reportNotes, setReportNotes] = useState('');
 
@@ -89,7 +88,6 @@ export const LogModal: React.FC<LogModalProps> = ({
           setActiveTab('reports');
           setReportDate(formatted);
           setReportType(logToEdit.report_type);
-          setReportTitle(logToEdit.title);
           setReportData(logToEdit.data || '');
           setReportNotes(logToEdit.notes || '');
         } else {
@@ -125,7 +123,6 @@ export const LogModal: React.FC<LogModalProps> = ({
 
         setReportDate(formatted);
         setReportType('CBC');
-        setReportTitle('');
         setReportData('');
         setReportNotes('');
       }
@@ -239,7 +236,7 @@ export const LogModal: React.FC<LogModalProps> = ({
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportDate || !reportType || !reportTitle) {
+    if (!reportDate || !reportType || !reportData) {
       showToast('Please fill out all required fields.', 'warning');
       return;
     }
@@ -250,7 +247,6 @@ export const LogModal: React.FC<LogModalProps> = ({
         id: logToEdit ? logToEdit.id : undefined,
         timestamp: new Date(reportDate).toISOString(),
         report_type: reportType,
-        title: reportTitle,
         data: reportData,
         notes: reportNotes
       });
@@ -569,19 +565,6 @@ export const LogModal: React.FC<LogModalProps> = ({
                     <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="modal-report-title">Report Title *</label>
-                <input 
-                  type="text" 
-                  id="modal-report-title" 
-                  className="form-control"
-                  placeholder="e.g. CBC or Lipid Profile"
-                  value={reportTitle}
-                  onChange={(e) => setReportTitle(e.target.value)}
-                  required 
-                />
               </div>
 
               <div className="form-group grid-col-2">
