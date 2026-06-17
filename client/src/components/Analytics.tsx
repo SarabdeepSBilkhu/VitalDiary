@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Calculator, LineChart as ChartIcon, FlaskConical, FileText } from 'lucide-react';
+import type { ChartData } from 'chart.js';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel } from '../utils/evaluators';
@@ -155,7 +156,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     return availableParams[0] ?? '';
   }, [metric, availableParams, selectedParam]);
 
-  const activeReportChartData = useMemo(() => {
+  const activeReportChartData = useMemo<ChartData<'line', (number | null)[], string> | null>(() => {
     if (!activeReportParam || activeReportLogs.length === 0) return null;
     const labels = [...activeReportLogs].reverse().map(r => formatDateLabel(r.timestamp));
     const values = [...activeReportLogs].reverse().map(r => {
@@ -219,13 +220,6 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
       .map(([parameter, value]) => ({ parameter, value }))
       .slice(0, 8);
   }, [activeReportLogs]);
-
-  const selectedReport = useMemo(() => activeReportLogs[0] ?? null, [activeReportLogs]);
-
-  const selectedHistoryReport = useMemo(() => {
-    if (!selectedReport) return null;
-    return selectedReport;
-  }, [selectedReport]);
 
   // 3. Calculate Stats based on filtered logs
   const stats = useMemo(() => {
@@ -424,6 +418,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
       y: { grid: { color: gridColor }, ticks: { color: textColor, font: { family: 'Outfit' } } },
     },
   };
+
+  const reportChartData = activeReportChartData ?? { labels: [], datasets: [] };
 
   const titles: Record<typeof metric, string> = {
     bp: 'Blood Pressure Trends',
@@ -685,7 +681,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                             </div>
                           </div>
                           <div className="chart-container-large">
-                            <Line data={activeReportChartData} options={chartOptions} />
+                            <Line data={reportChartData} options={chartOptions} />
                           </div>
                         </>
                       ) : (

@@ -21,6 +21,7 @@ export interface ReportRecord {
   user_id: number;
   timestamp: string;
   report_type: string;
+  title: string;
   data: string;
   notes: string;
 }
