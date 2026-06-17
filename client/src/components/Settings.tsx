@@ -333,43 +333,103 @@ export const Settings: React.FC<SettingsProps> = ({
 
     y += 8;
 
-    // ─── Section 2: 30-day glucose ───────────────────────────────────────────
+    // ─── Section 2: 30-day glucose (grouped by context) ───────────────────────
 
-    const glucoseCols = [
-      { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 65 },
-      { name: "Context", x: 100 }, { name: "Guidelines Status", x: 130 },
-      { name: "Diet Notes", x: 165 }
+    const glucoseGroupCols = [
+      { name: "Date & Time", x: 16 }, { name: "Glucose Level", x: 70 },
+      { name: "Guidelines Status", x: 110 }, { name: "Diet Notes", x: 155 }
     ];
 
+    const glucoseGroups = [
+      { key: 'fasting' as const, label: 'Fasting' },
+      { key: 'pre-meal' as const, label: 'Pre-Meal' },
+      { key: 'post-meal' as const, label: 'Post-Meal' },
+    ];
+
+    const calcGlucoseAvg = (logs: GlucoseRecord[]) =>
+      logs.length ? Math.round(logs.reduce((a, b) => a + b.value, 0) / logs.length) : 0;
+
     const glFasting30 = glucose30.filter(g => g.context === 'fasting');
-    const avgFast30 = glFasting30.length
-      ? Math.round(glFasting30.reduce((a, b) => a + b.value, 0) / glFasting30.length)
-      : 0;
+    const glPreMeal30 = glucose30.filter(g => g.context === 'pre-meal');
     const glPostMeal30 = glucose30.filter(g => g.context === 'post-meal');
-    const avgPostMeal30 = glPostMeal30.length
-      ? Math.round(glPostMeal30.reduce((a, b) => a + b.value, 0) / glPostMeal30.length)
-      : 0;
+    const avgFast30 = calcGlucoseAvg(glFasting30);
+    const avgPreMeal30 = calcGlucoseAvg(glPreMeal30);
+    const avgPostMeal30 = calcGlucoseAvg(glPostMeal30);
 
     drawSummaryBox(`30-DAY GLUCOSE SUMMARY (${glucose30.length} readings)`, [
-      `Average Fasting Glucose:   ${avgFast30 ? `${avgFast30} mg/dL` : 'N/A'}`,
-      `Average Post-Meal Glucose: ${avgPostMeal30 ? `${avgPostMeal30} mg/dL` : 'N/A'}`,
+      `Fasting:    ${glFasting30.length ? `avg ${avgFast30} mg/dL (${glFasting30.length} readings)` : 'N/A'}`,
+      `Pre-Meal:   ${glPreMeal30.length ? `avg ${avgPreMeal30} mg/dL (${glPreMeal30.length} readings)` : 'N/A'}`,
+      `Post-Meal:  ${glPostMeal30.length ? `avg ${avgPostMeal30} mg/dL (${glPostMeal30.length} readings)` : 'N/A'}`,
     ]);
 
-    drawHeader("2. BLOOD GLUCOSE (LAST 30 DAYS)", [115, 93, 120], glucoseCols);
+    const drawGlucoseGroupHeader = () => {
+      doc.setFillColor(115, 93, 120);
+      doc.rect(14, y, 182, 7, 'F');
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(255, 255, 255);
+      glucoseGroupCols.forEach(c => doc.text(c.name, c.x, y + 5));
+      y += 10;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(60, 60, 60);
+    };
+
+    const drawGlucoseGroupContinuation = (groupLabel: string) => {
+      doc.addPage();
+      y = 20;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(50, 50, 50);
+      doc.text(`2. BLOOD GLUCOSE (LAST 30 DAYS) — ${groupLabel} (Cont.)`, 14, y);
+      y += 10;
+      drawGlucoseGroupHeader();
+    };
+
+    ensurePageSpace(20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(50, 50, 50);
+    doc.text("2. BLOOD GLUCOSE (LAST 30 DAYS)", 14, y);
+    y += 10;
 
     if (glucose30.length === 0) {
-      doc.text("No glucose readings recorded in the last 30 days.", 16, y); y += 10;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(60, 60, 60);
+      doc.text("No glucose readings recorded in the last 30 days.", 16, y);
+      y += 10;
     } else {
-      glucose30.forEach(g => {
-        if (y + 7 > 280) drawContinuationHeader("2. BLOOD GLUCOSE (Cont.)", [115, 93, 120], glucoseCols);
-        doc.setFontSize(8);
-        const noteLines = doc.splitTextToSize(g.notes || '', 20).slice(0, 2);
-        doc.text(fmtDT(g.timestamp), 16, y);
-        doc.text(g.value ? `${g.value} mg/dL` : 'N/A', 65, y);
-        doc.text(g.context.toUpperCase(), 100, y);
-        doc.text(evaluateGlucose(g.value, g.context).status, 130, y);
-        doc.text(noteLines, 165, y);
+      glucoseGroups.forEach(({ key, label }, groupIndex) => {
+        const groupLogs = glucose30.filter(g => g.context === key);
+
+        if (groupIndex > 0) y += 4;
+        ensurePageSpace(18);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(80, 60, 90);
+        doc.text(`${label} (${groupLogs.length} reading${groupLogs.length === 1 ? '' : 's'})`, 16, y);
         y += 7;
+
+        if (groupLogs.length === 0) {
+          doc.setFont("helvetica", "italic");
+          doc.setFontSize(8);
+          doc.setTextColor(120, 120, 120);
+          doc.text(`No ${label.toLowerCase()} readings in the last 30 days.`, 16, y);
+          y += 8;
+          return;
+        }
+
+        drawGlucoseGroupHeader();
+        groupLogs.forEach(g => {
+          if (y + 7 > 280) drawGlucoseGroupContinuation(label);
+          doc.setFontSize(8);
+          const noteLines = doc.splitTextToSize(g.notes || '', 30).slice(0, 2);
+          doc.text(fmtDT(g.timestamp), 16, y);
+          doc.text(g.value ? `${g.value} mg/dL` : 'N/A', 70, y);
+          doc.text(evaluateGlucose(g.value, g.context).status, 110, y);
+          doc.text(noteLines, 155, y);
+          y += 7;
+        });
       });
     }
 
