@@ -521,38 +521,57 @@ export const Settings: React.FC<SettingsProps> = ({
       y += 5;
 
       if (paramKeys.length > 0) {
+        const headerHeight = 7;
+
         doc.setFillColor(210, 105, 30);
-        doc.rect(16, y, 176, 6, 'F');
+        doc.rect(16, y, 176, headerHeight, 'F');
+
         doc.setFont("helvetica", "bold");
         doc.setFontSize(7);
         doc.setTextColor(255, 255, 255);
-        doc.text("Parameter", 18, y + 4.2);
-        doc.text("Value", 115, y + 4.2);
-        y += 8;
+        doc.text("Parameter", 18, y + headerHeight / 2 + 1);
+        doc.text("Value", 115, y + headerHeight / 2 + 1);
+
+        y += headerHeight;
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         doc.setTextColor(60, 60, 60);
+
         paramKeys.forEach((key, paramIndex) => {
-          ensurePageSpace(6);
-          if (paramIndex % 2 === 0) {
-            doc.setFillColor(248, 248, 248);
-            doc.rect(16, y - 3.5, 176, 5.5, 'F');
-          }
-          doc.text(key, 18, y);
-          doc.text(String(params[key]), 115, y);
-          y += 5.5;
+            const keyLines = doc.splitTextToSize(key, 90);
+            const valueLines = doc.splitTextToSize(String(params[key]), 70);
+
+            const lineCount = Math.max(keyLines.length, valueLines.length);
+            const rowHeight = Math.max(7, lineCount * 4.5 + 2);
+
+            ensurePageSpace(rowHeight);
+
+            if (paramIndex % 2 === 0) {
+                doc.setFillColor(248, 248, 248);
+                doc.rect(16, y, 176, rowHeight, 'F');
+            }
+
+            keyLines.forEach((line: string, i: number) => {
+                doc.text(line, 18, y + 5 + i * 4.5);
+            });
+
+            valueLines.forEach((line: string, i: number) => {
+                doc.text(line, 115, y + 5 + i * 4.5);
+            });
+
+            y += rowHeight;
         });
-      } else if (r.data?.trim()) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(60, 60, 60);
-        const resultLines = doc.splitTextToSize(r.data.trim(), 176);
-        resultLines.forEach((line: string) => {
-          ensurePageSpace(5);
-          doc.text(line, 16, y);
-          y += 4.5;
-        });
+    } else if (r.data?.trim()) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    const resultLines = doc.splitTextToSize(r.data.trim(), 176);
+    resultLines.forEach((line: string) => {
+        ensurePageSpace(5);
+        doc.text(line, 16, y);
+        y += 4.5;
+    });
       } else {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(8);
