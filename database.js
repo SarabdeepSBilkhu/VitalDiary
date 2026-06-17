@@ -43,9 +43,15 @@ function convertSql(sql) {
   converted = converted.replace(/INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT/gi, 'SERIAL PRIMARY KEY');
   converted = converted.replace(/\bDATETIME\b/gi, 'TIMESTAMP');
   
-  // Append RETURNING id to INSERTs to mimic SQLite lastID behavior
+  // Append RETURNING clause to INSERTs to mimic SQLite lastID behavior
   if (/^\s*insert\s+/i.test(converted) && !/returning/i.test(converted)) {
-    converted += ' RETURNING id';
+    if (/on\s+conflict/i.test(converted)) {
+      // Upserts (e.g. profiles) fetch the saved row separately and may not have an id column
+    } else if (/\binsert\s+into\s+profiles\b/i.test(converted)) {
+      converted += ' RETURNING user_id';
+    } else {
+      converted += ' RETURNING id';
+    }
   }
   
   return converted;
@@ -57,7 +63,7 @@ const dbQuery = {
     if (isPg) {
       const convertedSql = convertSql(sql);
       const res = await pool.query(convertedSql, params);
-      const lastID = res.rows[0] ? res.rows[0].id : null;
+      const lastID = res.rows[0] ? (res.rows[0].id ?? res.rows[0].user_id ?? null) : null;
       return { lastID, changes: res.rowCount };
     } else {
       return new Promise((resolve, reject) => {
