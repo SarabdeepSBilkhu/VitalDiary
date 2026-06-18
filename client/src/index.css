@@ -485,7 +485,7 @@ button {
 }
 
 .btn-success {
-  background-color: var(--color-primary);
+  background-color: var(--color-success);
   color: white;
 }
 

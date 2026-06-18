@@ -203,7 +203,7 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
             <Pill className="color-primary" size={22} />
             <h3>Medications</h3>
           </div>
-          <button className="btn btn-success btn-sm" onClick={openAddModal} disabled={loading}>
+          <button className="btn btn-primary btn-sm" onClick={openAddModal} disabled={loading}>
             <Plus size={14} style={{ marginRight: '4px' }} /> Add Medication
           </button>
         </div>
