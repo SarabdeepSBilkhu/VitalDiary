@@ -323,7 +323,7 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
                 onClick={handleSave}
                 disabled={saving || !formData.name.trim() || formData.timeOfDay.length === 0}
               >
-                {saving ? 'Saving...' : editingId ? 'Update' : 'Add'} Medication
+                {saving ? 'Saving...' : editingId ? 'Update Medication' : 'Add Medication'}
               </button>
             </div>
           </div>
