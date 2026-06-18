@@ -347,25 +347,21 @@ export const Settings: React.FC<SettingsProps> = ({
     doc.setTextColor(100, 100, 100);
 
     doc.text(
-    `Generated on: ${new Date().toLocaleDateString()} | Reporting period: Last ${PDF_WINDOW_DAYS} days`,
-    14,
-    32
+        `Generated on: ${new Date().toLocaleDateString()} | Reporting period: Last ${PDF_WINDOW_DAYS} days`,
+        14,
+        32
     );
 
     y = 45;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}  |  Reporting period: Last ${PDF_WINDOW_DAYS} days`, 14, 30);
-    y = 50;
 
     // Patient summary
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(50, 50, 50);
-    doc.text("PATIENT SUMMARY", 14, y);
-    y += 8;
+    doc.text("PATIENT SUMMARY", 14, y); 
     doc.setDrawColor(220, 225, 230);
-    doc.line(14, y - 2, 196, y - 2);    
+    doc.line(14, y + 3, 196, y + 3);
+    y += 12;
     
     const patientLines = [
       `Name:               ${displayOrNA(profile.name)}`,
@@ -470,7 +466,7 @@ export const Settings: React.FC<SettingsProps> = ({
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
       glucoseGroupCols.forEach(c => doc.text(c.name, c.x, y + 5));
-      y += 10;
+      y += 12;
       doc.setFont("helvetica", "normal");
       doc.setTextColor(60, 60, 60);
     };
@@ -709,22 +705,6 @@ export const Settings: React.FC<SettingsProps> = ({
       });
     }
 
-    // ─── Disclaimer page ─────────────────────────────────────────────────────
-
-    doc.addPage();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(50, 50, 50);
-    doc.text("IMPORTANT DISCLAIMER", 14, 25);
-    doc.setDrawColor(220, 220, 220);
-    doc.line(14, 30, 196, 30);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    const disclaimer = doc.splitTextToSize(
-      `This report is generated from user-entered health data and uploaded medical records. It is intended solely for record keeping and informational purposes. This document is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional regarding medical concerns and treatment decisions.`,
-      170
-    );
-    doc.text(disclaimer, 14, 40);
 
     // ─── Page numbers ─────────────────────────────────────────────────────────
 
