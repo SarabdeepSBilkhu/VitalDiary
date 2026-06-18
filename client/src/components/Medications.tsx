@@ -229,9 +229,12 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
                         <div key={`${getTimeOfDayKey(group)}-${medication.id}`} className="summary-item">
                           <div>
                             <div className="summary-value">{medication.name}</div>
-                            <div className="summary-label">{formatTimeOfDay(medication.timeOfDay)}</div>
-                            {medication.instructions && <div className="text-secondary text-sm">{medication.instructions}</div>}
-                          </div>
+                            {medication.instructions && (
+                                <div className="text-secondary text-sm">
+                                {medication.instructions}
+                                </div>
+                            )}
+                            </div>
                           <div className="d-flex gap-2">
                             <button
                               className="btn btn-outline btn-sm"
