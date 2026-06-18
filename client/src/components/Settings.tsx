@@ -257,51 +257,6 @@ export const Settings: React.FC<SettingsProps> = ({
     const periodLabel = `${periodStart.toLocaleDateString()} – ${periodEnd.toLocaleDateString()}`;
 
     const doc = new jsPDF();
-
-    doc.setFillColor(34, 49, 63);
-    doc.rect(0, 0, 210, 297, 'F');
-
-    doc.setTextColor(255, 255, 255);
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(30);
-    doc.text('VITALDIARY', 105, 80, {
-    align: 'center'
-    });
-
-    doc.setFontSize(18);
-    doc.text(
-    'Comprehensive Health Report',
-    105,
-    95,
-    {
-        align: 'center'
-    }
-    );
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(12);
-
-    doc.text(
-    `Generated: ${new Date().toLocaleDateString()}`,
-    105,
-    125,
-    {
-        align: 'center'
-    }
-    );
-
-    doc.text(
-    userEmail,
-    105,
-    135,
-    {
-        align: 'center'
-    }
-    );
-
-    doc.addPage();
-
     let y = 20;
 
     const ensurePageSpace = (needed: number) => {
@@ -323,8 +278,17 @@ export const Settings: React.FC<SettingsProps> = ({
 
         ensurePageSpace(boxHeight + 4);
 
-        doc.setFillColor(242, 245, 248);
-        doc.rect(14, y, boxWidth, boxHeight, 'F');
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(220, 225, 230);
+        doc.roundedRect(
+        14,
+        y,
+        boxWidth,
+        boxHeight,
+        2,
+        2,
+        'FD'
+        );
 
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
@@ -368,12 +332,27 @@ export const Settings: React.FC<SettingsProps> = ({
     };
 
     // Header
-    doc.setFillColor(34, 49, 63);
-    doc.rect(0, 0, 220, 35, 'F');
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(255, 255, 255);
-    doc.text("VITALDIARY HEALTH REPORT", 14, 23);
+    doc.setFontSize(20);
+    doc.setTextColor(79, 93, 117);
+
+    doc.text("VITALDIARY HEALTH REPORT", 14, 20);
+
+    doc.setDrawColor(79, 93, 117);
+    doc.setLineWidth(0.5);
+    doc.line(14, 24, 196, 24);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+
+    doc.text(
+    `Generated on: ${new Date().toLocaleDateString()} | Reporting period: Last ${PDF_WINDOW_DAYS} days`,
+    14,
+    32
+    );
+
+    y = 45;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text(`Generated on: ${new Date().toLocaleDateString()}  |  Reporting period: Last ${PDF_WINDOW_DAYS} days`, 14, 30);
@@ -385,7 +364,9 @@ export const Settings: React.FC<SettingsProps> = ({
     doc.setTextColor(50, 50, 50);
     doc.text("PATIENT SUMMARY", 14, y);
     y += 8;
-
+    doc.setDrawColor(220, 225, 230);
+    doc.line(14, y - 2, 196, y - 2);    
+    
     const patientLines = [
       `Name:               ${displayOrNA(profile.name)}`,
       `Age / Gender:       ${displayOrNA(profile.age)} / ${displayOrNA(profile.gender)}`,
@@ -572,7 +553,11 @@ export const Settings: React.FC<SettingsProps> = ({
       `Period Change:   ${weightChange30}`,
     ]);
 
-    drawHeader("3. WEIGHT TRACKER (LAST 30 DAYS)", [34, 139, 34], weightCols);
+    drawHeader(
+    "3. WEIGHT TRACKER (LAST 30 DAYS)",
+    [88, 125, 105],
+    weightCols
+    );
 
     if (weights30.length === 0) {
       doc.text("No weight readings recorded in the last 30 days.", 16, y); y += 10;
@@ -604,13 +589,13 @@ export const Settings: React.FC<SettingsProps> = ({
       const reportType = getReportTypeFromRecord(r);
       ensurePageSpace(30);
 
-      doc.setDrawColor(210, 105, 30);
+      doc.setDrawColor(168, 115, 75);
       doc.setLineWidth(0.3);
-      doc.setFillColor(255, 248, 240);
+      doc.setFillColor(252, 248, 244);
       doc.roundedRect(14, y, 182, 8, 1, 1, 'FD');
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
-      doc.setTextColor(80, 45, 10);
+      doc.setTextColor(95, 70, 45);
       doc.text(`${reportType}  —  ${fmtDT(r.timestamp)}`, 16, y + 5.5);
       y += 12;
 
@@ -626,7 +611,7 @@ export const Settings: React.FC<SettingsProps> = ({
       if (paramKeys.length > 0) {
         const headerHeight = 7;
 
-        doc.setFillColor(210, 105, 30);
+        doc.setFillColor(168, 115, 75);
         doc.rect(16, y, 176, headerHeight, 'F');
 
         doc.setFont("helvetica", "bold");
@@ -731,6 +716,8 @@ export const Settings: React.FC<SettingsProps> = ({
     doc.setFontSize(16);
     doc.setTextColor(50, 50, 50);
     doc.text("IMPORTANT DISCLAIMER", 14, 25);
+    doc.setDrawColor(220, 220, 220);
+    doc.line(14, 30, 196, 30);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
     const disclaimer = doc.splitTextToSize(
