@@ -34,9 +34,6 @@ const normalizeTimeOfDay = (value: unknown): TimeOfDay[] => {
   return ['morning'];
 };
 
-const formatTimeOfDay = (timeOfDay: TimeOfDay[]) =>
-  timeOfDay.map(time => (time === 'sos' ? 'SOS' : time.charAt(0).toUpperCase() + time.slice(1))).join(', ');
-
 const getTimeOfDayKey = (timeOfDay: TimeOfDay[]) =>
   [...timeOfDay].sort().join('+');
 
