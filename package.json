@@ -18,7 +18,8 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.21.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

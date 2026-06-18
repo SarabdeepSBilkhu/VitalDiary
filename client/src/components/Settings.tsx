@@ -4,7 +4,7 @@ import {
   Upload, Database, AlertOctagon 
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
@@ -108,6 +108,28 @@ export const Settings: React.FC<SettingsProps> = ({
 
     const wb = XLSX.utils.book_new();
 
+    const summarySheet = XLSX.utils.aoa_to_sheet([
+    ['VitalDiary Export Summary'],
+    [],
+    ['Export Date', new Date().toLocaleString()],
+    ['Vitals Records', vitals.length],
+    ['Glucose Records', glucose.length],
+    ['Weight Records', weights.length],
+    ['Medical Reports', reports.length],
+    ['Total Records', allLogs.length]
+    ]);
+
+    summarySheet['!cols'] = [
+    { wch: 25 },
+    { wch: 25 }
+    ];
+
+    XLSX.utils.book_append_sheet(
+    wb,
+    summarySheet,
+    'Dashboard'
+    );
+
     // Vitals Sheet
     if (vitals.length > 0) {
       const vitalsData = vitals.map(v => ({
@@ -120,6 +142,42 @@ export const Settings: React.FC<SettingsProps> = ({
         "Notes": v.notes || ''
       }));
       const wsVitals = XLSX.utils.json_to_sheet(vitalsData);
+
+        const vitalsRange = XLSX.utils.decode_range(
+        wsVitals['!ref'] || 'A1'
+        );
+
+        for (let c = vitalsRange.s.c; c <= vitalsRange.e.c; c++) {
+        const cell = XLSX.utils.encode_cell({ r: 0, c });
+
+        if (!wsVitals[cell]) continue;
+
+        wsVitals[cell].s = {
+            font: {
+            bold: true,
+            color: { rgb: 'FFFFFF' }
+            },
+            fill: {
+            fgColor: { rgb: '4F46E5' }
+            }
+        };
+        }
+
+        if (wsVitals['!ref']) {
+        wsVitals['!autofilter'] = {
+            ref: wsVitals['!ref']
+        };
+        }
+
+        wsVitals['!cols'] = [
+        { wch: 20 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 20 },
+        { wch: 40 }
+        ];
       XLSX.utils.book_append_sheet(wb, wsVitals, "Vitals Logs");
     }
 
@@ -199,6 +257,51 @@ export const Settings: React.FC<SettingsProps> = ({
     const periodLabel = `${periodStart.toLocaleDateString()} – ${periodEnd.toLocaleDateString()}`;
 
     const doc = new jsPDF();
+
+    doc.setFillColor(34, 49, 63);
+    doc.rect(0, 0, 210, 297, 'F');
+
+    doc.setTextColor(255, 255, 255);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(30);
+    doc.text('VITALDIARY', 105, 80, {
+    align: 'center'
+    });
+
+    doc.setFontSize(18);
+    doc.text(
+    'Comprehensive Health Report',
+    105,
+    95,
+    {
+        align: 'center'
+    }
+    );
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+
+    doc.text(
+    `Generated: ${new Date().toLocaleDateString()}`,
+    105,
+    125,
+    {
+        align: 'center'
+    }
+    );
+
+    doc.text(
+    userEmail,
+    105,
+    135,
+    {
+        align: 'center'
+    }
+    );
+
+    doc.addPage();
+
     let y = 20;
 
     const ensurePageSpace = (needed: number) => {
@@ -644,7 +747,11 @@ export const Settings: React.FC<SettingsProps> = ({
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(120, 120, 120);
-      doc.text(`Page ${i} of ${pageCount}`, 170, 290);
+      doc.text(
+        `VitalDiary • Page ${i} of ${pageCount}`,
+        145,
+        290
+        );
     }
 
     doc.save("vitaldiary_health_report.pdf");

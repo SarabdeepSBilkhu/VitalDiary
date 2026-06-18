@@ -92,7 +92,7 @@
 
   --bg-app: #ffffff;
   --bg-sidebar: #f1f4f6;
-  --bg-surface: #e5e8e9;
+  --bg-surface: #f8f8f8;
   --bg-surface-elevated: #fafafa;
 
   --border-color: rgba(0, 0, 0, 0.08);
@@ -689,7 +689,13 @@ button {
 
 .chart-container {
   position: relative;
-  height: 250px;
+  height: 350px;
+  width: 100%;
+}
+
+.chart-container-large {
+  position: relative;
+  height: 450px;
   width: 100%;
 }
 
