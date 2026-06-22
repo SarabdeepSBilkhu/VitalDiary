@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx-js-style';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
-import { parseAllReportParameters, getLatestReportsByType, getReportTypeFromRecord } from './Analytics';
+import { parseAllReportParameters, getLatestReportsByType, getReportTypeFromRecord } from '../utils/reportUtils';
 
 const fmtDT = (ts: string) => {
   const d = new Date(ts);

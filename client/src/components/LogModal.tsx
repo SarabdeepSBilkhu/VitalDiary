@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Activity, Thermometer, Weight, FileText } from 'lucide-react';
 
-const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Other Reports'];
+const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Urine Report', 'Other Reports'];
 
 interface LogModalProps {
   isOpen: boolean;
