@@ -19,7 +19,8 @@ export function parseReportParameters(text: string): Record<string, number> {
   const cleaned = text.replace(/['"]/g, '');
 
   // Pattern: word(s) + optional colon/equals + numeric value (unit ignored)
-  const regex = /([A-Za-z][A-Za-z0-9\s\-/()]{0,40}?)\s*[:\-=]\s*([0-9]+(?:\.[0-9]+)?)/g;
+  // Support optional bounding indicators like >, <, -, etc. before the number
+  const regex = /([A-Za-z][A-Za-z0-9\s\-/()]{0,40}?)\s*[:\-=]\s*[>\-<\s]*([0-9]+(?:\.[0-9]+)?)/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(cleaned)) !== null) {
@@ -31,6 +32,43 @@ export function parseReportParameters(text: string): Record<string, number> {
   }
   return result;
 }
+
+export function parseAllReportParameters(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!text) return result;
+
+  const items: string[] = [];
+  const itemRegex = /"([^"]+)"|'([^']+)'|([^,\n]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = itemRegex.exec(text)) !== null) {
+    const val = match[1] || match[2] || match[3];
+    if (val && val.trim()) {
+      items.push(val.trim());
+    }
+  }
+
+  for (const item of items) {
+    const separatorIdx = item.indexOf(':') !== -1 ? item.indexOf(':') : item.indexOf('=');
+    if (separatorIdx !== -1) {
+      const key = item.substring(0, separatorIdx).trim();
+      const val = item.substring(separatorIdx + 1).trim();
+      if (key && val) {
+        result[key] = val;
+      }
+    } else {
+      const spaceMatch = item.match(/^([A-Za-z0-9\s\-/()]+?)\s+([0-9+>\-<]+.*)$/);
+      if (spaceMatch) {
+        const key = spaceMatch[1].trim();
+        const val = spaceMatch[2].trim();
+        if (key && val) {
+          result[key] = val;
+        }
+      }
+    }
+  }
+  return result;
+}
+
 
 // Collect all unique parameter names across a list of reports
 function collectParameters(reports: ReportRecord[]): string[] {

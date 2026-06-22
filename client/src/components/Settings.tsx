@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx-js-style';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
-import { parseReportParameters, getLatestReportsByType, getReportTypeFromRecord } from './Analytics';
+import { parseAllReportParameters, getLatestReportsByType, getReportTypeFromRecord } from './Analytics';
 
 const fmtDT = (ts: string) => {
   const d = new Date(ts);
@@ -595,7 +595,7 @@ export const Settings: React.FC<SettingsProps> = ({
       doc.text(`${reportType}  —  ${fmtDT(r.timestamp)}`, 16, y + 5.5);
       y += 12;
 
-      const params = parseReportParameters(r.data || '');
+      const params = parseAllReportParameters(r.data || '');
       const paramKeys = Object.keys(params);
 
       doc.setFont("helvetica", "bold");
