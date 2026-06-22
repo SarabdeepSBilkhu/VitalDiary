@@ -50,16 +50,20 @@ export function parseAllReportParameters(text: string): Record<string, string> {
   for (const item of items) {
     const separatorIdx = item.indexOf(':') !== -1 ? item.indexOf(':') : item.indexOf('=');
     if (separatorIdx !== -1) {
-      const key = item.substring(0, separatorIdx).trim();
-      const val = item.substring(separatorIdx + 1).trim();
+      let key = item.substring(0, separatorIdx).trim();
+      let val = item.substring(separatorIdx + 1).trim();
+      key = key.replace(/^["']|["']$/g, '').trim();
+      val = val.replace(/^["']|["']$/g, '').trim();
       if (key && val) {
         result[key] = val;
       }
     } else {
       const spaceMatch = item.match(/^([A-Za-z0-9\s\-/()]+?)\s+([0-9+>\-<]+.*)$/);
       if (spaceMatch) {
-        const key = spaceMatch[1].trim();
-        const val = spaceMatch[2].trim();
+        let key = spaceMatch[1].trim();
+        let val = spaceMatch[2].trim();
+        key = key.replace(/^["']|["']$/g, '').trim();
+        val = val.replace(/^["']|["']$/g, '').trim();
         if (key && val) {
           result[key] = val;
         }
