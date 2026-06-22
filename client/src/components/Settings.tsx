@@ -598,6 +598,18 @@ export const Settings: React.FC<SettingsProps> = ({
       const params = parseAllReportParameters(r.data || '');
       const paramKeys = Object.keys(params);
 
+      // Find the previous report of the same type in user's report history
+      const typeReports = reports
+        .filter(report => getReportTypeFromRecord(report) === reportType)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      const currentReportIdx = typeReports.findIndex(report => report.id === r.id);
+      const prevReport = currentReportIdx !== -1 && currentReportIdx + 1 < typeReports.length 
+        ? typeReports[currentReportIdx + 1] 
+        : null;
+
+      const prevParams = prevReport ? parseAllReportParameters(prevReport.data || '') : {};
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(50, 50, 50);
@@ -614,7 +626,8 @@ export const Settings: React.FC<SettingsProps> = ({
         doc.setFontSize(7);
         doc.setTextColor(255, 255, 255);
         doc.text("Parameter", 18, y + headerHeight / 2 + 1);
-        doc.text("Value", 115, y + headerHeight / 2 + 1);
+        doc.text("Value", 95, y + headerHeight / 2 + 1);
+        doc.text("Previous Value", 145, y + headerHeight / 2 + 1);
 
         y += headerHeight;
 
@@ -623,10 +636,12 @@ export const Settings: React.FC<SettingsProps> = ({
         doc.setTextColor(60, 60, 60);
 
         paramKeys.forEach((key, paramIndex) => {
-            const keyLines = doc.splitTextToSize(key, 90);
-            const valueLines = doc.splitTextToSize(String(params[key]), 70);
+            const keyLines = doc.splitTextToSize(key, 70);
+            const valueLines = doc.splitTextToSize(String(params[key]), 45);
+            const prevVal = prevParams[key] !== undefined ? String(prevParams[key]) : '--';
+            const prevLines = doc.splitTextToSize(prevVal, 45);
 
-            const lineCount = Math.max(keyLines.length, valueLines.length);
+            const lineCount = Math.max(keyLines.length, valueLines.length, prevLines.length);
             const rowHeight = Math.max(7, lineCount * 4.5 + 2);
 
             ensurePageSpace(rowHeight);
@@ -641,7 +656,11 @@ export const Settings: React.FC<SettingsProps> = ({
             });
 
             valueLines.forEach((line: string, i: number) => {
-                doc.text(line, 115, y + 5 + i * 4.5);
+                doc.text(line, 95, y + 5 + i * 4.5);
+            });
+
+            prevLines.forEach((line: string, i: number) => {
+                doc.text(line, 145, y + 5 + i * 4.5);
             });
 
             y += rowHeight;
