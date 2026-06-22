@@ -24,17 +24,18 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { id, timestamp, report_type, title, data, notes } = req.body;
 
-  if (!timestamp || !report_type || !title) {
-    return res.status(400).json({ error: 'Missing mandatory fields (timestamp, report_type, title).' });
+  if (!timestamp || !report_type) {
+    return res.status(400).json({ error: 'Missing mandatory fields (timestamp, report_type).' });
   }
 
   const recordId = id || `report-${Date.now()}`;
+  const reportTitle = title || report_type;
 
   try {
     await dbQuery.run(
       `INSERT INTO reports (id, user_id, timestamp, report_type, title, data, notes) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [recordId, req.user.id, timestamp, report_type, title, data || '', notes || '']
+      [recordId, req.user.id, timestamp, report_type, reportTitle, data || '', notes || '']
     );
 
     const newLog = await dbQuery.get('SELECT * FROM reports WHERE id = ?', [recordId]);
@@ -50,9 +51,11 @@ router.put('/:id', async (req, res) => {
   const { timestamp, report_type, title, data, notes } = req.body;
   const { id } = req.params;
 
-  if (!timestamp || !report_type || !title) {
+  if (!timestamp || !report_type) {
     return res.status(400).json({ error: 'Missing mandatory fields.' });
   }
+
+  const reportTitle = title || report_type;
 
   try {
     // Verify ownership
@@ -65,7 +68,7 @@ router.put('/:id', async (req, res) => {
       `UPDATE reports 
        SET timestamp = ?, report_type = ?, title = ?, data = ?, notes = ? 
        WHERE id = ? AND user_id = ?`,
-      [timestamp, report_type, title, data || '', notes || '', id, req.user.id]
+      [timestamp, report_type, reportTitle, data || '', notes || '', id, req.user.id]
     );
 
     const updatedLog = await dbQuery.get('SELECT * FROM reports WHERE id = ?', [id]);
@@ -117,7 +120,7 @@ router.post('/restore', async (req, res) => {
           req.user.id,
           log.timestamp,
           log.report_type,
-          log.title,
+          log.title || log.report_type,
           log.data || '',
           log.notes || ''
         ]
