@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   Settings as SettingsIcon, LogOut, Download, FileSpreadsheet, FileText, 
-  Upload, Database, AlertOctagon 
+  Upload, Database, AlertOctagon, CalendarRange
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx-js-style';
@@ -10,25 +10,32 @@ import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '.
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
 import { parseAllReportParameters, getLatestReportsByType, getReportTypeFromRecord } from '../utils/reportUtils';
 
+type ExportPreset = '7days' | '30days' | '90days' | '1year' | 'all' | 'custom';
+
 const fmtDT = (ts: string) => {
   const d = new Date(ts);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' +
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-const PDF_WINDOW_DAYS = 30;
-
-const isWithinLastDays = (timestamp: string, days: number) => {
-  const now = new Date();
+const isWithinRange = (timestamp: string, from: Date, to: Date) => {
   const logDate = new Date(timestamp);
-  const diffDays = Math.ceil(Math.abs(now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
-  return diffDays <= days;
+  return logDate >= from && logDate <= to;
 };
 
-const filterRecent = <T extends { timestamp: string }>(records: T[], days = PDF_WINDOW_DAYS) =>
+const filterByRange = <T extends { timestamp: string }>(records: T[], from: Date, to: Date) =>
   records
-    .filter(r => isWithinLastDays(r.timestamp, days))
+    .filter(r => isWithinRange(r.timestamp, from, to))
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+const toDateInputValue = (d: Date) => d.toISOString().slice(0, 10);
+
+const PRESET_DAYS: Record<Exclude<ExportPreset, 'all' | 'custom'>, number> = {
+  '7days': 7,
+  '30days': 30,
+  '90days': 90,
+  '1year': 365,
+};
 
 const displayOrNA = (value: string | number | undefined | null) => {
   if (value === undefined || value === null || value === '') return 'N/A';
@@ -62,17 +69,53 @@ export const Settings: React.FC<SettingsProps> = ({
   const [resetting, setResetting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Export period state ──────────────────────────────────────────────────────
+  const [exportPreset, setExportPreset] = useState<ExportPreset>('30days');
+  const today = toDateInputValue(new Date());
+  const thirtyDaysAgo = toDateInputValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [customFrom, setCustomFrom] = useState(thirtyDaysAgo);
+  const [customTo, setCustomTo] = useState(today);
+
+  const exportRange = useMemo<{ from: Date; to: Date }>(() => {
+    const to = new Date();
+    to.setHours(23, 59, 59, 999);
+    if (exportPreset === 'all') {
+      return { from: new Date(0), to };
+    }
+    if (exportPreset === 'custom') {
+      const from = new Date(customFrom);
+      from.setHours(0, 0, 0, 0);
+      const customToDate = new Date(customTo);
+      customToDate.setHours(23, 59, 59, 999);
+      return { from, to: customToDate };
+    }
+    const from = new Date();
+    from.setDate(from.getDate() - PRESET_DAYS[exportPreset]);
+    from.setHours(0, 0, 0, 0);
+    return { from, to };
+  }, [exportPreset, customFrom, customTo]);
+
+  const exportRangeLabel = useMemo(() => {
+    if (exportPreset === 'all') return 'All Time';
+    return `${exportRange.from.toLocaleDateString()} – ${exportRange.to.toLocaleDateString()}`;
+  }, [exportPreset, exportRange]);
+
   // 1. Export CSV
   const handleExportCSV = () => {
-    if (allLogs.length === 0) {
-      showToast('No data available to export.', 'warning');
+    const filteredLogs = allLogs.filter(log =>
+      isWithinRange(log.timestamp, exportRange.from, exportRange.to)
+    );
+
+    if (filteredLogs.length === 0) {
+      showToast('No data in the selected period to export.', 'warning');
       return;
     }
 
     let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += `Export Period: ${exportRangeLabel}\r\n`;
     csvContent += "Type,Timestamp/Date,Systolic (BP),Diastolic (BP),Heart Rate (bpm),Oxygen (SpO2 %),Glucose (mg/dL),Glucose Context,Weight (kg),Report Type,Report Lab Data,Notes/Comments\r\n";
 
-    allLogs.forEach(log => {
+    filteredLogs.forEach(log => {
       const type = log.type;
       if (type === 'vitals') {
         const v = log as VitalsRecord;
@@ -92,7 +135,7 @@ export const Settings: React.FC<SettingsProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "vitaldiary_health_logs.csv");
+    link.setAttribute("download", `vitaldiary_health_logs_${exportRange.from.toISOString().slice(0,10)}_to_${exportRange.to.toISOString().slice(0,10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -101,8 +144,14 @@ export const Settings: React.FC<SettingsProps> = ({
 
   // 2. Export Excel (XLSX)
   const handleExportExcel = () => {
-    if (allLogs.length === 0) {
-      showToast('No data available to export.', 'warning');
+    const vitalsFiltered = filterByRange(vitals, exportRange.from, exportRange.to);
+    const glucoseFiltered = filterByRange(glucose, exportRange.from, exportRange.to);
+    const weightsFiltered = filterByRange(weights, exportRange.from, exportRange.to);
+    const reportsFiltered = filterByRange(reports, exportRange.from, exportRange.to);
+    const totalFiltered = vitalsFiltered.length + glucoseFiltered.length + weightsFiltered.length + reportsFiltered.length;
+
+    if (totalFiltered === 0) {
+      showToast('No data in the selected period to export.', 'warning');
       return;
     }
 
@@ -112,27 +161,25 @@ export const Settings: React.FC<SettingsProps> = ({
     ['VitalDiary Export Summary'],
     [],
     ['Export Date', new Date().toLocaleString()],
-    ['Vitals Records', vitals.length],
-    ['Glucose Records', glucose.length],
-    ['Weight Records', weights.length],
-    ['Medical Reports', reports.length],
-    ['Total Records', allLogs.length]
+    ['Export Period', exportRangeLabel],
+    [],
+    ['Vitals Records', vitalsFiltered.length],
+    ['Glucose Records', glucoseFiltered.length],
+    ['Weight Records', weightsFiltered.length],
+    ['Medical Reports', reportsFiltered.length],
+    ['Total Records', totalFiltered]
     ]);
 
     summarySheet['!cols'] = [
     { wch: 25 },
-    { wch: 25 }
+    { wch: 35 }
     ];
 
-    XLSX.utils.book_append_sheet(
-    wb,
-    summarySheet,
-    'Dashboard'
-    );
+    XLSX.utils.book_append_sheet(wb, summarySheet, 'Dashboard');
 
     // Vitals Sheet
-    if (vitals.length > 0) {
-      const vitalsData = vitals.map(v => ({
+    if (vitalsFiltered.length > 0) {
+      const vitalsData = vitalsFiltered.map(v => ({
         "Date & Time": fmtDT(v.timestamp),
         "Systolic (mmHg)": v.systolic,
         "Diastolic (mmHg)": v.diastolic,
@@ -143,47 +190,23 @@ export const Settings: React.FC<SettingsProps> = ({
       }));
       const wsVitals = XLSX.utils.json_to_sheet(vitalsData);
 
-        const vitalsRange = XLSX.utils.decode_range(
-        wsVitals['!ref'] || 'A1'
-        );
-
-        for (let c = vitalsRange.s.c; c <= vitalsRange.e.c; c++) {
+      const vitalsRange = XLSX.utils.decode_range(wsVitals['!ref'] || 'A1');
+      for (let c = vitalsRange.s.c; c <= vitalsRange.e.c; c++) {
         const cell = XLSX.utils.encode_cell({ r: 0, c });
-
         if (!wsVitals[cell]) continue;
-
         wsVitals[cell].s = {
-            font: {
-            bold: true,
-            color: { rgb: 'FFFFFF' }
-            },
-            fill: {
-            fgColor: { rgb: '4F46E5' }
-            }
+          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '4F46E5' } }
         };
-        }
-
-        if (wsVitals['!ref']) {
-        wsVitals['!autofilter'] = {
-            ref: wsVitals['!ref']
-        };
-        }
-
-        wsVitals['!cols'] = [
-        { wch: 20 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 20 },
-        { wch: 40 }
-        ];
+      }
+      if (wsVitals['!ref']) wsVitals['!autofilter'] = { ref: wsVitals['!ref'] };
+      wsVitals['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 40 }];
       XLSX.utils.book_append_sheet(wb, wsVitals, "Vitals Logs");
     }
 
     // Glucose Sheet
-    if (glucose.length > 0) {
-      const glucoseData = glucose.map(g => ({
+    if (glucoseFiltered.length > 0) {
+      const glucoseData = glucoseFiltered.map(g => ({
         "Date & Time": fmtDT(g.timestamp),
         "Glucose Value (mg/dL)": g.value,
         "Measurement Time": g.context.toUpperCase(),
@@ -195,8 +218,8 @@ export const Settings: React.FC<SettingsProps> = ({
     }
 
     // Weight Sheet
-    if (weights.length > 0) {
-      const weightData = weights.map(w => ({
+    if (weightsFiltered.length > 0) {
+      const weightData = weightsFiltered.map(w => ({
         "Date & Time": fmtDT(w.timestamp),
         "Weight (kg)": w.value,
         "Notes": w.notes || ''
@@ -206,8 +229,8 @@ export const Settings: React.FC<SettingsProps> = ({
     }
 
     // Reports Sheet
-    if (reports.length > 0) {
-      const reportsData = reports.map(r => ({
+    if (reportsFiltered.length > 0) {
+      const reportsData = reportsFiltered.map(r => ({
         "Date & Time": fmtDT(r.timestamp),
         "Report Type": r.report_type,
         "Lab Results": r.data || '',
@@ -218,11 +241,13 @@ export const Settings: React.FC<SettingsProps> = ({
     }
 
     if (wb.SheetNames.length === 0) {
-      showToast('Export failed. Data arrays are empty.', 'danger');
+      showToast('Export failed. No data matched the selected period.', 'danger');
       return;
     }
 
-    XLSX.writeFile(wb, "vitaldiary_excel_export.xlsx");
+    const fromSlug = exportRange.from.toISOString().slice(0, 10);
+    const toSlug = exportRange.to.toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `vitaldiary_export_${fromSlug}_to_${toSlug}.xlsx`);
     showToast('Excel Workbook exported successfully.', 'success');
   };
 
@@ -237,12 +262,12 @@ export const Settings: React.FC<SettingsProps> = ({
       // Continue with empty profile if fetch fails
     }
 
-    const vitals30 = filterRecent(vitals);
-    const glucose30 = filterRecent(glucose);
-    const weights30 = filterRecent(weights);
+    const vitalsFiltered = filterByRange(vitals, exportRange.from, exportRange.to);
+    const glucoseFiltered = filterByRange(glucose, exportRange.from, exportRange.to);
+    const weightsFiltered = filterByRange(weights, exportRange.from, exportRange.to);
     const latestReportsByType = getLatestReportsByType(reports);
 
-    const hasContent = vitals30.length > 0 || glucose30.length > 0 || weights30.length > 0 || latestReportsByType.length > 0
+    const hasContent = vitalsFiltered.length > 0 || glucoseFiltered.length > 0 || weightsFiltered.length > 0 || latestReportsByType.length > 0
       || [profile.name, profile.age, profile.gender, profile.bloodGroup, profile.height, profile.allergies, profile.emergencyContact]
         .some(v => v?.trim());
 
@@ -251,10 +276,7 @@ export const Settings: React.FC<SettingsProps> = ({
       return;
     }
 
-    const periodEnd = new Date();
-    const periodStart = new Date();
-    periodStart.setDate(periodStart.getDate() - PDF_WINDOW_DAYS);
-    const periodLabel = `${periodStart.toLocaleDateString()} – ${periodEnd.toLocaleDateString()}`;
+    const periodLabel = exportRangeLabel;
 
     const doc = new jsPDF();
     let y = 20;
@@ -347,7 +369,7 @@ export const Settings: React.FC<SettingsProps> = ({
     doc.setTextColor(100, 100, 100);
 
     doc.text(
-        `Generated on: ${new Date().toLocaleDateString()} | Reporting period: Last ${PDF_WINDOW_DAYS} days`,
+        `Generated on: ${new Date().toLocaleDateString()} | Reporting period: ${periodLabel}`,
         14,
         32
     );
@@ -391,26 +413,26 @@ export const Settings: React.FC<SettingsProps> = ({
       { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
     ];
 
-    const avgSys30 = vitals30.length ? Math.round(vitals30.reduce((a, b) => a + b.systolic, 0) / vitals30.length) : 0;
-    const avgDia30 = vitals30.length ? Math.round(vitals30.reduce((a, b) => a + b.diastolic, 0) / vitals30.length) : 0;
-    const avgHr30 = vitals30.length ? Math.round(vitals30.reduce((a, b) => a + b.hr, 0) / vitals30.length) : 0;
-    const spo2Readings = vitals30.filter(v => v.spo2);
-    const avgSpo230 = spo2Readings.length
+    const avgSysPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + b.systolic, 0) / vitalsFiltered.length) : 0;
+    const avgDiaPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + b.diastolic, 0) / vitalsFiltered.length) : 0;
+    const avgHrPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + b.hr, 0) / vitalsFiltered.length) : 0;
+    const spo2Readings = vitalsFiltered.filter(v => v.spo2);
+    const avgSpo2Period = spo2Readings.length
       ? Math.round(spo2Readings.reduce((a, b) => a + (b.spo2 || 0), 0) / spo2Readings.length)
       : 0;
 
-    drawSummaryBox(`30-DAY VITALS SUMMARY (${vitals30.length} readings)`, [
-      `Average Blood Pressure:  ${avgSys30 ? `${avgSys30}/${avgDia30} mmHg` : 'N/A'}`,
-      `Average Heart Rate:      ${avgHr30 ? `${avgHr30} bpm` : 'N/A'}`,
-      `Average SpO2:            ${avgSpo230 ? `${avgSpo230}%` : 'N/A'}`,
+    drawSummaryBox(`VITALS SUMMARY — ${periodLabel} (${vitalsFiltered.length} readings)`, [
+      `Average Blood Pressure:  ${avgSysPeriod ? `${avgSysPeriod}/${avgDiaPeriod} mmHg` : 'N/A'}`,
+      `Average Heart Rate:      ${avgHrPeriod ? `${avgHrPeriod} bpm` : 'N/A'}`,
+      `Average SpO2:            ${avgSpo2Period ? `${avgSpo2Period}%` : 'N/A'}`,
     ]);
 
-    drawHeader("1. BLOOD PRESSURE & HEART RATE (LAST 30 DAYS)", [79, 93, 117], vitalsCols);
+    drawHeader(`1. BLOOD PRESSURE & HEART RATE (${periodLabel})`, [79, 93, 117], vitalsCols);
 
-    if (vitals30.length === 0) {
-      doc.text("No vitals recorded in the last 30 days.", 16, y); y += 10;
+    if (vitalsFiltered.length === 0) {
+      doc.text(`No vitals recorded in the selected period.`, 16, y); y += 10;
     } else {
-      vitals30.forEach(v => {
+      vitalsFiltered.forEach(v => {
         if (y + 7 > 280) drawContinuationHeader("1. BLOOD PRESSURE & HEART RATE (Cont.)", [79, 93, 117], vitalsCols);
         doc.setFontSize(8);
         const bpStatus = evaluateBP(v.systolic, v.diastolic).status
@@ -446,17 +468,17 @@ export const Settings: React.FC<SettingsProps> = ({
     const calcGlucoseAvg = (logs: GlucoseRecord[]) =>
       logs.length ? Math.round(logs.reduce((a, b) => a + b.value, 0) / logs.length) : 0;
 
-    const glFasting30 = glucose30.filter(g => g.context === 'fasting');
-    const glPreMeal30 = glucose30.filter(g => g.context === 'pre-meal');
-    const glPostMeal30 = glucose30.filter(g => g.context === 'post-meal');
-    const avgFast30 = calcGlucoseAvg(glFasting30);
-    const avgPreMeal30 = calcGlucoseAvg(glPreMeal30);
-    const avgPostMeal30 = calcGlucoseAvg(glPostMeal30);
+    const glFastingPeriod = glucoseFiltered.filter(g => g.context === 'fasting');
+    const glPreMealPeriod = glucoseFiltered.filter(g => g.context === 'pre-meal');
+    const glPostMealPeriod = glucoseFiltered.filter(g => g.context === 'post-meal');
+    const avgFastPeriod = calcGlucoseAvg(glFastingPeriod);
+    const avgPreMealPeriod = calcGlucoseAvg(glPreMealPeriod);
+    const avgPostMealPeriod = calcGlucoseAvg(glPostMealPeriod);
 
-    drawSummaryBox(`30-DAY GLUCOSE SUMMARY (${glucose30.length} readings)`, [
-      `Fasting:    ${glFasting30.length ? `avg ${avgFast30} mg/dL (${glFasting30.length} readings)` : 'N/A'}`,
-      `Pre-Meal:   ${glPreMeal30.length ? `avg ${avgPreMeal30} mg/dL (${glPreMeal30.length} readings)` : 'N/A'}`,
-      `Post-Meal:  ${glPostMeal30.length ? `avg ${avgPostMeal30} mg/dL (${glPostMeal30.length} readings)` : 'N/A'}`,
+    drawSummaryBox(`GLUCOSE SUMMARY — ${periodLabel} (${glucoseFiltered.length} readings)`, [
+      `Fasting:    ${glFastingPeriod.length ? `avg ${avgFastPeriod} mg/dL (${glFastingPeriod.length} readings)` : 'N/A'}`,
+      `Pre-Meal:   ${glPreMealPeriod.length ? `avg ${avgPreMealPeriod} mg/dL (${glPreMealPeriod.length} readings)` : 'N/A'}`,
+      `Post-Meal:  ${glPostMealPeriod.length ? `avg ${avgPostMealPeriod} mg/dL (${glPostMealPeriod.length} readings)` : 'N/A'}`,
     ]);
 
     const drawGlucoseGroupHeader = () => {
@@ -486,18 +508,18 @@ export const Settings: React.FC<SettingsProps> = ({
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.setTextColor(50, 50, 50);
-    doc.text("2. BLOOD GLUCOSE (LAST 30 DAYS)", 14, y);
+    doc.text(`2. BLOOD GLUCOSE (${periodLabel})`, 14, y);
     y += 10;
 
-    if (glucose30.length === 0) {
+    if (glucoseFiltered.length === 0) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(60, 60, 60);
-      doc.text("No glucose readings recorded in the last 30 days.", 16, y);
+      doc.text("No glucose readings recorded in the selected period.", 16, y);
       y += 10;
     } else {
       glucoseGroups.forEach(({ key, label }, groupIndex) => {
-        const groupLogs = glucose30.filter(g => g.context === key);
+        const groupLogs = glucoseFiltered.filter(g => g.context === key);
 
         if (groupIndex > 0) y += 4;
         ensurePageSpace(18);
@@ -511,7 +533,7 @@ export const Settings: React.FC<SettingsProps> = ({
           doc.setFont("helvetica", "italic");
           doc.setFontSize(8);
           doc.setTextColor(120, 120, 120);
-          doc.text(`No ${label.toLowerCase()} readings in the last 30 days.`, 16, y);
+          doc.text(`No ${label.toLowerCase()} readings in the selected period.`, 16, y);
           y += 8;
           return;
         }
@@ -538,27 +560,23 @@ export const Settings: React.FC<SettingsProps> = ({
       { name: "Date & Time", x: 16 }, { name: "Weight (kg)", x: 80 }, { name: "Notes", x: 130 }
     ];
 
-    const latestWeight30 = weights30[0]?.value;
-    const oldestWeight30 = weights30.length > 0 ? weights30[weights30.length - 1].value : null;
-    const weightChange30 = latestWeight30 != null && oldestWeight30 != null && weights30.length > 1
-      ? `${(latestWeight30 - oldestWeight30).toFixed(1)} kg`
+    const latestWeightPeriod = weightsFiltered[0]?.value;
+    const oldestWeightPeriod = weightsFiltered.length > 0 ? weightsFiltered[weightsFiltered.length - 1].value : null;
+    const weightChangePeriod = latestWeightPeriod != null && oldestWeightPeriod != null && weightsFiltered.length > 1
+      ? `${(latestWeightPeriod - oldestWeightPeriod).toFixed(1)} kg`
       : 'N/A';
 
-    drawSummaryBox(`30-DAY WEIGHT SUMMARY (${weights30.length} readings)`, [
-      `Latest Weight:   ${latestWeight30 != null ? `${latestWeight30} kg` : 'N/A'}`,
-      `Period Change:   ${weightChange30}`,
+    drawSummaryBox(`WEIGHT SUMMARY — ${periodLabel} (${weightsFiltered.length} readings)`, [
+      `Latest Weight:   ${latestWeightPeriod != null ? `${latestWeightPeriod} kg` : 'N/A'}`,
+      `Period Change:   ${weightChangePeriod}`,
     ]);
 
-    drawHeader(
-    "3. WEIGHT TRACKER (LAST 30 DAYS)",
-    [88, 125, 105],
-    weightCols
-    );
+    drawHeader(`3. WEIGHT TRACKER (${periodLabel})`, [88, 125, 105], weightCols);
 
-    if (weights30.length === 0) {
-      doc.text("No weight readings recorded in the last 30 days.", 16, y); y += 10;
+    if (weightsFiltered.length === 0) {
+      doc.text(`No weight readings recorded in the selected period.`, 16, y); y += 10;
     } else {
-      weights30.forEach(w => {
+      weightsFiltered.forEach(w => {
         if (y + 7 > 280) drawContinuationHeader("3. WEIGHT TRACKER (Cont.)", [34, 139, 34], weightCols);
         doc.setFontSize(8);
         const noteLines = doc.splitTextToSize(w.notes || '', 40).slice(0, 2);
@@ -740,7 +758,9 @@ export const Settings: React.FC<SettingsProps> = ({
         );
     }
 
-    doc.save("vitaldiary_health_report.pdf");
+    const fromSlug = exportRange.from.toISOString().slice(0, 10);
+    const toSlug = exportRange.to.toISOString().slice(0, 10);
+    doc.save(`vitaldiary_report_${fromSlug}_to_${toSlug}.pdf`);
     showToast('PDF Report downloaded successfully.', 'success');
   };
 
@@ -922,6 +942,66 @@ export const Settings: React.FC<SettingsProps> = ({
               Export your records to tabular formats for doctor visits or backup a secure copy locally.
             </p>
 
+            {/* ── Export Period Picker ────────────────────────────────────── */}
+            <div className="export-period-picker mb-4">
+              <div className="d-flex align-center gap-2 mb-3" style={{ color: 'var(--color-primary)' }}>
+                <CalendarRange size={17} />
+                <span className="text-sm font-semibold">Export Period</span>
+              </div>
+
+              <div className="export-preset-tabs">
+                {(['7days', '30days', '90days', '1year', 'all', 'custom'] as ExportPreset[]).map(preset => {
+                  const labels: Record<ExportPreset, string> = {
+                    '7days': '7 Days', '30days': '30 Days', '90days': '90 Days',
+                    '1year': '1 Year', 'all': 'All Time', 'custom': 'Custom'
+                  };
+                  return (
+                    <button
+                      key={preset}
+                      className={`export-preset-btn${exportPreset === preset ? ' active' : ''}`}
+                      onClick={() => setExportPreset(preset)}
+                      type="button"
+                    >
+                      {labels[preset]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {exportPreset === 'custom' && (
+                <div className="d-flex gap-3 mt-3" style={{ flexWrap: 'wrap' }}>
+                  <div className="form-group" style={{ flex: 1, minWidth: '140px' }}>
+                    <label className="text-xs text-secondary mb-1 block">From</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={customFrom}
+                      max={customTo}
+                      onChange={e => setCustomFrom(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group" style={{ flex: 1, minWidth: '140px' }}>
+                    <label className="text-xs text-secondary mb-1 block">To</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={customTo}
+                      min={customFrom}
+                      max={today}
+                      onChange={e => setCustomTo(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {exportPreset !== 'custom' && (
+                <div className="export-range-badge mt-2">
+                  <span className="text-xs text-muted">📅 {exportRangeLabel}</span>
+                </div>
+              )}
+            </div>
+            {/* ────────────────────────────────────────────────────────────── */}
+
             <div className="d-flex flex-column gap-3">
               <button className="btn btn-outline justify-between" onClick={handleExportCSV}>
                 <span className="d-flex align-center gap-2"><Download size={18} /> Export as CSV File</span>
@@ -935,7 +1015,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
               <button className="btn btn-outline justify-between" onClick={() => void handleExportPDF()}>
                 <span className="d-flex align-center gap-2"><FileText size={18} className="color-danger" /> Export Medical PDF Report</span>
-                <span className="text-xs text-muted">30-day summary + latest labs by type</span>
+                <span className="text-xs text-muted">Period summary + latest labs by type</span>
               </button>
 
               <div className="border-top my-2 pt-3">

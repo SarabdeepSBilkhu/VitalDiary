@@ -1449,7 +1449,55 @@ select.form-control {
 
 
 /* ============================================================
-   17. RESPONSIVE / MOBILE
+   17. EXPORT PRESETS
+   ============================================================ */
+
+.export-period-picker {
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 1rem;
+}
+
+.export-preset-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.export-preset-btn {
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--border-radius-sm);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-preset-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.export-preset-btn.active {
+  background-color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.export-range-badge {
+  display: inline-block;
+  padding: 0.35rem 0.65rem;
+  background-color: var(--bg-surface);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius-sm);
+}
+
+/* ============================================================
+   18. RESPONSIVE / MOBILE
    ============================================================ */
 
 .mobile-nav-bar {
