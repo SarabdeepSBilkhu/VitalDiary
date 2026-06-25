@@ -197,6 +197,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
       glucoseFastingAvg: '--',
       glucosePreAvg: '--',
       glucosePostAvg: '--',
+      estimatedHbA1c: '--',
     };
 
     if (filteredLogs.length === 0) return results;
@@ -249,6 +250,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'glucose') {
       const glLogs = filteredLogs as GlucoseRecord[];
+
+      const now = new Date();
+      const past3MonthsGlucose = glucose.filter(log => {
+        const logDate = new Date(log.timestamp);
+        const diffDays = Math.ceil(Math.abs(now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
+        return diffDays <= 90;
+      });
+      if (past3MonthsGlucose.length > 0) {
+        const sum = past3MonthsGlucose.reduce((a, b) => a + b.value, 0);
+        const avg = sum / past3MonthsGlucose.length;
+        const hba1c = (avg + 46.7) / 28.7;
+        results.estimatedHbA1c = `${hba1c.toFixed(1)}%`;
+      }
+
       results.avg = `${Math.round(glLogs.reduce((a, b) => a + b.value, 0) / glLogs.length)} mg/dL`;
       const sorted = [...glLogs].sort((a, b) => b.value - a.value);
       results.highest = `${sorted[0].value} mg/dL`;
@@ -297,7 +312,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     results.warning = warningCount;
     results.critical = criticalCount;
     return results;
-  }, [filteredLogs, metric, resolvedParam]);
+  }, [filteredLogs, metric, resolvedParam, glucose]);
 
   // 4. Prepare Chart Data & Options
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -706,6 +721,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
                 {metric === 'glucose' && (
                   <>
+                    <div className="summary-item">
+                      <div className="summary-label">Estimated HbA1c (90 Days)</div>
+                      <div className="summary-value">{stats.estimatedHbA1c}</div>
+                    </div>
                     <div className="summary-item">
                       <div className="summary-label">Fasting Average</div>
                       <div className="summary-value">{stats.glucoseFastingAvg}</div>

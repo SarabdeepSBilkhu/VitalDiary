@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const { dbQuery } = require('../database');
 const authenticateToken = require('../middleware/auth');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'vitaldiary_fallback_secret_key_123';
+const JWT_SECRET = process.env.JWT_SECRET || '5fa886b2925e167df6a334b148143d8618f47b29184e98271046f8d0273fcf3e';
 
 // 1. User Registration
 router.post('/register', async (req, res) => {
