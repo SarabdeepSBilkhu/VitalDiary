@@ -33,6 +33,18 @@ Record glucose readings with context:
 * Review historical trends
 * Monitor long-term progress
 
+### User Profile Management
+
+* Store demographic information (age, gender, height)
+* Record vital medical info (blood group, allergies)
+* Keep emergency contact information accessible
+
+### Medication Tracking
+
+* Maintain a comprehensive list of active medications
+* Track schedules (Morning, Afternoon, Night, SOS)
+* Add custom dosing instructions for each medication
+
 ### Medical Reports
 
 Store and organize:
@@ -49,10 +61,11 @@ Store and organize:
 * Calendar-based record navigation
 * Dashboard summaries
 
-### Reporting
+### Reporting, Export & Backup
 
-* PDF export support
-* Spreadsheet export support
+* PDF health report generation with patient summary
+* Spreadsheet (Excel/CSV) export support
+* Full database backup and restore via JSON
 * Historical data review
 
 ---
@@ -117,6 +130,8 @@ vitaldiary/
 │   │   │   ├── HistoryView.tsx
 │   │   │   ├── Login.tsx
 │   │   │   ├── LogModal.tsx
+│   │   │   ├── Medications.tsx
+│   │   │   ├── Profile.tsx
 │   │   │   ├── Register.tsx
 │   │   │   ├── Settings.tsx
 │   │   │   └── Toast.tsx
@@ -130,10 +145,12 @@ vitaldiary/
 │
 ├── routes/
 │   ├── auth.js
-│   ├── vitals.js
 │   ├── glucose.js
-│   ├── weight.js
-│   └── reports.js
+│   ├── medications.js
+│   ├── profile.js
+│   ├── reports.js
+│   ├── vitals.js
+│   └── weight.js
 │
 ├── database.js
 ├── server.js
@@ -229,6 +246,32 @@ data
 notes
 ```
 
+### Profiles
+
+```text
+user_id
+name
+age
+gender
+blood_group
+height
+allergies
+emergency_contact
+updated_at
+```
+
+### Medications
+
+```text
+id
+user_id
+name
+time_of_day
+instructions
+created_at
+updated_at
+```
+
 ---
 
 ## Requirements
@@ -310,13 +353,15 @@ npm start
 
 ## API Modules
 
-| Module         | Description                |
-| -------------- | -------------------------- |
-| `/api/auth`    | User authentication        |
-| `/api/vitals`  | Vital signs management     |
-| `/api/glucose` | Blood glucose management   |
-| `/api/weight`  | Weight tracking            |
-| `/api/reports` | Medical reports management |
+| Module             | Description                |
+| ------------------ | -------------------------- |
+| `/api/auth`        | User authentication        |
+| `/api/profile`     | User profile management    |
+| `/api/vitals`      | Vital signs management     |
+| `/api/glucose`     | Blood glucose management   |
+| `/api/weight`      | Weight tracking            |
+| `/api/medications` | Medication tracking        |
+| `/api/reports`     | Medical reports management |
 
 ---
 
@@ -370,7 +415,6 @@ During cold starts, protected API endpoints may temporarily return:
 
 ## Future Enhancements
 
-* Medication tracking
 * Appointment management
 * Health reminders
 * Wearable device integration
