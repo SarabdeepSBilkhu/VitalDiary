@@ -82,7 +82,7 @@ function notifyDbReadyOnce() {
 }
 
 // Request dispatcher helper with auto-retry for database cold start warming
-async function request(url: string, method: string = 'GET', data?: any) {
+async function request(url: string, method: string = 'GET', data?: unknown) {
   const token = getToken();
   
   const headers: HeadersInit = {
@@ -178,11 +178,11 @@ export const api = {
     return await request('/api/vitals', 'GET');
   },
 
-  async createVitals(data: any) {
+  async createVitals(data: object) {
     return await request('/api/vitals', 'POST', data);
   },
 
-  async updateVitals(id: string, data: any) {
+  async updateVitals(id: string, data: object) {
     return await request(`/api/vitals/${id}`, 'PUT', data);
   },
 
@@ -195,11 +195,11 @@ export const api = {
     return await request('/api/glucose', 'GET');
   },
 
-  async createGlucose(data: any) {
+  async createGlucose(data: object) {
     return await request('/api/glucose', 'POST', data);
   },
 
-  async updateGlucose(id: string, data: any) {
+  async updateGlucose(id: string, data: object) {
     return await request(`/api/glucose/${id}`, 'PUT', data);
   },
 
@@ -212,11 +212,11 @@ export const api = {
     return await request('/api/weight', 'GET');
   },
 
-  async createWeight(data: any) {
+  async createWeight(data: object) {
     return await request('/api/weight', 'POST', data);
   },
 
-  async updateWeight(id: string, data: any) {
+  async updateWeight(id: string, data: object) {
     return await request(`/api/weight/${id}`, 'PUT', data);
   },
 
@@ -229,11 +229,11 @@ export const api = {
     return await request('/api/reports', 'GET');
   },
 
-  async createReport(data: any) {
+  async createReport(data: object) {
     return await request('/api/reports', 'POST', data);
   },
 
-  async updateReport(id: string, data: any) {
+  async updateReport(id: string, data: object) {
     return await request(`/api/reports/${id}`, 'PUT', data);
   },
 

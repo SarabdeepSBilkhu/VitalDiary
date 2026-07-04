@@ -137,7 +137,7 @@ export const App: React.FC = () => {
       window.removeEventListener('db-waking-up', handleDbWaking);
       window.removeEventListener('db-ready', handleDbReady);
     };
-  }, []);
+  }, [handleRefreshData]);
 
 
 
