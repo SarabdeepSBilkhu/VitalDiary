@@ -68,6 +68,12 @@ Store and organize:
 * Full database backup and restore via JSON
 * Historical data review
 
+### AI Health Assistant
+
+* Context-aware chat assistant powered by Llama 3.3 (via Groq API)
+* Personalized health insights derived from user profile, medications, vitals, glucose logs, and medical reports
+* Secure local system prompt context injection with medical disclaimers
+
 ---
 
 ## Technology Stack
@@ -101,6 +107,10 @@ Store and organize:
 * jsPDF
 * xlsx
 
+### AI Integration
+
+* Groq API (Llama 3.3 Versatile model)
+
 ---
 
 ## Architecture
@@ -124,6 +134,7 @@ vitaldiary/
 ├── client/
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── AiAssistant.tsx
 │   │   │   ├── Analytics.tsx
 │   │   │   ├── CalendarView.tsx
 │   │   │   ├── Dashboard.tsx
@@ -136,6 +147,9 @@ vitaldiary/
 │   │   │   ├── Settings.tsx
 │   │   │   └── Toast.tsx
 │   │   ├── utils/
+│   │   │   ├── api.ts
+│   │   │   ├── evaluators.ts
+│   │   │   └── reportUtils.ts
 │   │   ├── App.tsx
 │   │   └── main.tsx
 │   └── package.json
@@ -144,6 +158,7 @@ vitaldiary/
 │   └── auth.js
 │
 ├── routes/
+│   ├── ai.js
 │   ├── auth.js
 │   ├── glucose.js
 │   ├── medications.js
@@ -155,7 +170,7 @@ vitaldiary/
 ├── database.js
 ├── server.js
 ├── package.json
-└── vitaldiary.db
+├── vitaldiary.db
 ```
 
 ---
@@ -309,6 +324,9 @@ JWT_SECRET=your-secret-key
 # Optional PostgreSQL configuration
 DATABASE_URL=
 DATABASE_PRIVATE_URL=
+
+# Groq AI Assistant configuration
+GROQ_API_KEY=your_groq_api_key
 ```
 
 ---
@@ -362,6 +380,7 @@ npm start
 | `/api/weight`      | Weight tracking            |
 | `/api/medications` | Medication tracking        |
 | `/api/reports`     | Medical reports management |
+| `/api/ai`          | AI health assistant        |
 
 ---
 
