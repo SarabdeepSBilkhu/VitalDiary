@@ -42,6 +42,7 @@ app.use('/api/vitals', require('./routes/vitals'));
 app.use('/api/glucose', require('./routes/glucose'));
 app.use('/api/weight', require('./routes/weight'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/ai', require('./routes/ai'));
 
 // Serve Frontend Static Build Assets in Production
 const clientBuildPath = path.join(__dirname, 'client', 'dist');

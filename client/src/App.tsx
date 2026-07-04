@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   LayoutDashboard, LineChart as ChartIcon, Calendar, Clock, Settings as SettingsIcon, 
   HeartPulse, PlusCircle, LogOut, Sun, Moon, Sparkles, Loader2, UserCircle2, Pill 
 } from 'lucide-react';
 import { api, getCurrentUser, removeToken } from './utils/api';
 import type { VitalsRecord, GlucoseRecord } from './utils/evaluators';
-import type { WeightRecord, ReportRecord } from './utils/api';
+import type { WeightRecord, ReportRecord, User } from './utils/api';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { Dashboard } from './components/Dashboard';
@@ -16,12 +16,15 @@ import { CalendarView } from './components/CalendarView';
 import { HistoryView } from './components/HistoryView';
 import { Settings } from './components/Settings';
 import { LogModal } from './components/LogModal';
+import { AiAssistant } from './components/AiAssistant';
 import { Toast } from './components/Toast';
 import type { ToastType } from './components/Toast';
 
+export type HealthRecord = VitalsRecord | GlucoseRecord | WeightRecord | ReportRecord;
+
 export const App: React.FC = () => {
   // Auth state
-  const [user, setUser] = useState<any>(getCurrentUser());
+  const [user, setUser] = useState<User | null>(getCurrentUser());
   const [authView, setAuthView] = useState<'login' | 'register'>('login');
   
   // Navigation & UI state
@@ -43,7 +46,7 @@ export const App: React.FC = () => {
 
   // Modal Dialogs state
   const [modalOpen, setModalOpen] = useState(false);
-  const [logToEdit, setLogToEdit] = useState<any>(null);
+  const [logToEdit, setLogToEdit] = useState<HealthRecord | null>(null);
   const [calendarDate, setCalendarDate] = useState<Date | null>(null);
 
   // Toast state
@@ -66,6 +69,43 @@ export const App: React.FC = () => {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  // Fetch all health logs
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    Promise.resolve().then(() => setLoading(true));
+    try {
+      const [vitalsData, glucoseData, weightData, reportsData] = await Promise.all([
+        api.getVitals(),
+        api.getGlucose(),
+        api.getWeight(),
+        api.getReports()
+      ]);
+      setVitals(vitalsData);
+      setGlucose(glucoseData);
+      setWeights(weightData);
+      setReports(reportsData);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Error loading records.';
+      showToast(errorMsg, 'danger');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  const handleRefreshData = useCallback(async () => {
+    setRefreshTrigger(p => p + 1);
+  }, []);
+
+  // Fetch data on login or refresh trigger
+  useEffect(() => {
+    if (user) {
+      const timer = setTimeout(() => {
+        fetchData();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [user, refreshTrigger, fetchData]);
+
   // Sync auth expiration listener
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -79,9 +119,9 @@ export const App: React.FC = () => {
 
   // Listen for database warming state
   useEffect(() => {
-    const handleDbWaking = (e: any) => {
+    const handleDbWaking = (e: Event) => {
       dbWasWakingRef.current = true;
-      setDbWaking(e.detail);
+      setDbWaking((e as CustomEvent).detail);
     };
     const handleDbReady = () => {
       setDbWaking(null);
@@ -99,38 +139,7 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Fetch all health logs
-  const fetchData = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const [vitalsData, glucoseData, weightData, reportsData] = await Promise.all([
-        api.getVitals(),
-        api.getGlucose(),
-        api.getWeight(),
-        api.getReports()
-      ]);
-      setVitals(vitalsData);
-      setGlucose(glucoseData);
-      setWeights(weightData);
-      setReports(reportsData);
-    } catch (err: any) {
-      showToast(err.message || 'Error loading records.', 'danger');
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // Fetch data on login or refresh trigger
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user, refreshTrigger]);
-
-  const handleRefreshData = async () => {
-    setRefreshTrigger(p => p + 1);
-  };
 
   // Compile chronological list of all logs
   const allLogs = useMemo(() => {
@@ -145,7 +154,7 @@ export const App: React.FC = () => {
   }, [vitals, glucose, weights, reports]);
 
   // Modal open helper
-  const handleOpenLogModal = (log: any = null, defaultDate: Date | null = null) => {
+  const handleOpenLogModal = (log: HealthRecord | null = null, defaultDate: Date | null = null) => {
     setLogToEdit(log);
     setCalendarDate(defaultDate);
     setModalOpen(true);
@@ -158,7 +167,7 @@ export const App: React.FC = () => {
   };
 
   // Save Handlers
-  const handleSaveVitals = async (data: any) => {
+  const handleSaveVitals = async (data: VitalsRecord) => {
     if (data.id) {
       const updated = await api.updateVitals(data.id, data);
       setVitals(prev => prev.map(v => v.id === data.id ? updated : v));
@@ -170,7 +179,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleSaveGlucose = async (data: any) => {
+  const handleSaveGlucose = async (data: GlucoseRecord) => {
     if (data.id) {
       const updated = await api.updateGlucose(data.id, data);
       setGlucose(prev => prev.map(g => g.id === data.id ? updated : g));
@@ -182,7 +191,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleSaveWeight = async (data: any) => {
+  const handleSaveWeight = async (data: WeightRecord) => {
     if (data.id) {
       const updated = await api.updateWeight(data.id, data);
       setWeights(prev => prev.map(w => w.id === data.id ? updated : w));
@@ -194,7 +203,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleSaveReport = async (data: any) => {
+  const handleSaveReport = async (data: ReportRecord) => {
     if (data.id) {
       const updated = await api.updateReport(data.id, data);
       setReports(prev => prev.map(r => r.id === data.id ? updated : r));
@@ -224,8 +233,8 @@ export const App: React.FC = () => {
           setReports(prev => prev.filter(r => r.id !== id));
         }
         showToast('Record deleted successfully.', 'success');
-      } catch (err: any) {
-        showToast('Failed to delete record.', 'danger');
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Failed to delete record.', 'danger');
       }
     }
   };
@@ -287,6 +296,8 @@ export const App: React.FC = () => {
             onDeleteLog={handleDeleteLog}
           />
         );
+      case 'ai-assistant-view':
+        return <AiAssistant showToast={showToast} />;
       case 'settings-view':
         return (
           <Settings 
@@ -394,6 +405,14 @@ export const App: React.FC = () => {
             <Clock size={20} />
             <span>History</span>
           </button>
+
+          <button 
+            className={`nav-item ${activeView === 'ai-assistant-view' ? 'active' : ''}`}
+            onClick={() => setActiveView('ai-assistant-view')}
+          >
+            <Sparkles size={20} />
+            <span>AI Assistant</span>
+          </button>
           
           <button 
             className={`nav-item ${activeView === 'settings-view' ? 'active' : ''}`}
@@ -448,6 +467,7 @@ export const App: React.FC = () => {
               {activeView === 'analytics-view' && 'Medical Analytics'}
               {activeView === 'calendar-view' && 'Log Calendar'}
               {activeView === 'history-view' && 'Records Logs History'}
+              {activeView === 'ai-assistant-view' && 'AI Health Assistant'}
               {activeView === 'settings-view' && 'System Settings'}
             </h1>
             <p className="text-secondary text-sm">Welcome back, {user.email}. Keep your vitals updated.</p>
@@ -515,6 +535,14 @@ export const App: React.FC = () => {
         >
           <Clock size={22} />
           <span>History</span>
+        </button>
+
+        <button 
+          className={`mobile-nav-item ${activeView === 'ai-assistant-view' ? 'active' : ''}`}
+          onClick={() => setActiveView('ai-assistant-view')}
+        >
+          <Sparkles size={22} />
+          <span>AI</span>
         </button>
         
         <button 

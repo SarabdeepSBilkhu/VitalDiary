@@ -265,5 +265,10 @@ export const api = {
 
   async deleteMedication(id: string) {
     return await request(`/api/medications/${id}`, 'DELETE');
+  },
+
+  // AI Assistant
+  async sendAiMessage(messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>): Promise<{ reply: { role: string; content: string } }> {
+    return await request('/api/ai/chat', 'POST', { messages });
   }
 };
