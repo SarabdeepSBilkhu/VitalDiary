@@ -1592,7 +1592,7 @@ select.form-control {
   }
 
   .filters-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 0.75rem;
   }
 
@@ -1849,8 +1849,15 @@ select.form-control {
   }
 
   .filters-grid,
-  .report-params-grid {
+  .report-params-grid,
+  .export-custom-dates {
     grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .export-custom-dates > .form-group {
+    min-width: 0 !important;
+    width: 100%;
   }
 
   .mobile-nav-item {

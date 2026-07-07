@@ -97,7 +97,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
   const exportRangeLabel = useMemo(() => {
     if (exportPreset === 'all') return 'All Time';
-    return `${exportRange.from.toLocaleDateString()} – ${exportRange.to.toLocaleDateString()}`;
+    return `${exportRange.from.toLocaleDateString()} - ${exportRange.to.toLocaleDateString()}`;
   }, [exportPreset, exportRange]);
 
   // 1. Export CSV
@@ -969,7 +969,7 @@ export const Settings: React.FC<SettingsProps> = ({
               </div>
 
               {exportPreset === 'custom' && (
-                <div className="d-flex gap-3 mt-3" style={{ flexWrap: 'wrap' }}>
+                <div className="d-flex gap-3 mt-3 export-custom-dates" style={{ flexWrap: 'wrap' }}>
                   <div className="form-group" style={{ flex: 1, minWidth: '140px' }}>
                     <label className="text-xs text-secondary mb-1 block">From</label>
                     <input
