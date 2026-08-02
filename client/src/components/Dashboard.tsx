@@ -27,6 +27,40 @@ const fmtDT = (ts: string) => {
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
+const formatReportData = (raw: string): React.ReactNode => {
+  if (!raw) return <span className="text-muted">--</span>;
+  try {
+    const parsed = JSON.parse(raw);
+    const items: { name: string; value: string; unit: string }[] = Array.isArray(parsed)
+      ? parsed
+      : Object.entries(parsed).map(([name, value]) => ({ name, value: String(value), unit: '' }));
+    const shown = items.slice(0, 2);
+    const remaining = items.length - shown.length;
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+        {shown.map((item, i) => (
+          <span key={i} style={{
+            fontSize: '0.72rem',
+            background: 'var(--color-primary-light)',
+            color: 'var(--color-primary)',
+            padding: '1px 6px',
+            borderRadius: '999px',
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+          }}>
+            {item.name}: <span style={{ color: 'var(--text-primary)' }}>{item.value}</span>{item.unit ? ` ${item.unit}` : ''}
+          </span>
+        ))}
+        {remaining > 0 && (
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>+{remaining} more</span>
+        )}
+      </div>
+    );
+  } catch {
+    return <span className="text-secondary" style={{ fontSize: '0.8rem' }}>{raw}</span>;
+  }
+};
+
 interface DashboardProps {
   vitals: VitalsRecord[];
   glucose: GlucoseRecord[];
@@ -467,6 +501,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     );
                     badgeText = 'Saved';
                     badgeClass = 'status-info';
+                    valueLabel = formatReportData(reportLog.data);
                   }
 
                   return (
@@ -480,7 +515,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         title={log.notes || ''}
                       >
-                        {logType === 'reports' ? (log.data ? `Results: ${log.data} | ` : '') + (log.notes || '') : (log.notes || '--')}
+                        {log.notes || '--'}
                       </td>
                       <td>
                         <div className="action-buttons">

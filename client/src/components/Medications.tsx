@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Pill, Plus, X, Edit2, Trash2 } from 'lucide-react';
+import { Pill, Plus, X, Edit2, Trash2, Syringe } from 'lucide-react';
 import { api, type MedicationRecord } from '../utils/api';
 
-type TimeOfDay = 'morning' | 'afternoon' | 'night' | 'sos';
+type TimeOfDay = 'morning' | 'afternoon' | 'night' | 'insulin' | 'sos';
 type Medication = MedicationRecord;
 
 const TIME_OF_DAY_OPTIONS: TimeOfDay[] = ['morning', 'afternoon', 'night', 'sos'];
@@ -17,22 +17,6 @@ const TIME_OF_DAY_GROUPS: TimeOfDay[][] = [
   ['morning', 'afternoon', 'night'],
   ['sos'],
 ];
-
-const normalizeTimeOfDay = (value: unknown): TimeOfDay[] => {
-  if (Array.isArray(value)) {
-    return TIME_OF_DAY_OPTIONS.filter(option => value.includes(option));
-  }
-
-  if (value === 'morning' || value === 'afternoon' || value === 'night') {
-    return [value];
-  }
-
-  if (value === 'sos') {
-    return ['sos'];
-  }
-
-  return ['morning'];
-};
 
 const getTimeOfDayKey = (timeOfDay: TimeOfDay[]) =>
   [...timeOfDay].sort().join('+');
@@ -54,10 +38,12 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
     name: string;
     timeOfDay: TimeOfDay[];
     instructions: string;
+    isInsulin: boolean;
   }>({
     name: '',
     timeOfDay: [],
     instructions: '',
+    isInsulin: false,
   });
 
   useEffect(() => {
@@ -69,12 +55,18 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
         const data = await api.getMedications();
         if (!cancelled) {
           setMedications(
-            data.map(medication => ({
-              id: String(medication.id),
-              name: String(medication.name || ''),
-              timeOfDay: normalizeTimeOfDay(medication.timeOfDay),
-              instructions: String(medication.instructions || ''),
-            }))
+            data.map(medication => {
+              const rawTime = Array.isArray(medication.timeOfDay) ? medication.timeOfDay : [medication.timeOfDay];
+              const isIns = !!medication.isInsulin || rawTime.includes('insulin');
+              const cleanTime = rawTime.filter(t => t !== 'insulin') as TimeOfDay[];
+              return {
+                id: String(medication.id),
+                name: String(medication.name || ''),
+                timeOfDay: cleanTime.length > 0 ? cleanTime : ['morning'],
+                instructions: String(medication.instructions || ''),
+                isInsulin: isIns,
+              };
+            })
           );
         }
       } catch (err: any) {
@@ -96,7 +88,7 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
   }, [showToast]);
 
   const resetForm = () => {
-    setFormData({ name: '', timeOfDay: [], instructions: '' });
+    setFormData({ name: '', timeOfDay: [], instructions: '', isInsulin: false });
     setEditingId(null);
   };
 
@@ -105,11 +97,18 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
     setShowModal(true);
   };
 
+  const openAddInsulinModal = () => {
+    resetForm();
+    setFormData(prev => ({ ...prev, isInsulin: true }));
+    setShowModal(true);
+  };
+
   const openEditModal = (medication: Medication) => {
     setFormData({
       name: medication.name,
       timeOfDay: medication.timeOfDay,
       instructions: medication.instructions,
+      isInsulin: !!medication.isInsulin,
     });
     setEditingId(medication.id);
     setShowModal(true);
@@ -138,20 +137,24 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
       name: formData.name.trim(),
       timeOfDay: formData.timeOfDay,
       instructions: formData.instructions.trim(),
+      isInsulin: formData.isInsulin,
     };
 
     setSaving(true);
     try {
       if (editingId) {
         const updated = await api.updateMedication(editingId, payload);
+        const rawTime = Array.isArray(updated.timeOfDay) ? updated.timeOfDay : [updated.timeOfDay];
+        const cleanTime = rawTime.filter(t => t !== 'insulin') as TimeOfDay[];
         setMedications(prev =>
           prev.map(med =>
             med.id === editingId
               ? {
                   id: updated.id,
                   name: updated.name,
-                  timeOfDay: normalizeTimeOfDay(updated.timeOfDay),
+                  timeOfDay: cleanTime.length > 0 ? cleanTime : ['morning'],
                   instructions: updated.instructions || '',
+                  isInsulin: !!updated.isInsulin || rawTime.includes('insulin'),
                 }
               : med
           )
@@ -159,13 +162,16 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
         showToast?.('Medication updated successfully.', 'success');
       } else {
         const created = await api.createMedication(payload);
+        const rawTime = Array.isArray(created.timeOfDay) ? created.timeOfDay : [created.timeOfDay];
+        const cleanTime = rawTime.filter(t => t !== 'insulin') as TimeOfDay[];
         setMedications(prev => [
           ...prev,
           {
             id: created.id,
             name: created.name,
-            timeOfDay: normalizeTimeOfDay(created.timeOfDay),
+            timeOfDay: cleanTime.length > 0 ? cleanTime : ['morning'],
             instructions: created.instructions || '',
+            isInsulin: !!created.isInsulin || rawTime.includes('insulin'),
           },
         ]);
         showToast?.('Medication added successfully.', 'success');
@@ -190,36 +196,41 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
     }
   };
 
+  const regularMedications = medications.filter(med => !med.isInsulin);
+  const insulinMedications = medications.filter(med => med.isInsulin);
+
   const medicationsByTimeOfDay = TIME_OF_DAY_GROUPS.map(group => ({
     group,
-    medications: medications.filter(medication => getTimeOfDayKey(medication.timeOfDay) === getTimeOfDayKey(group)),
+    medications: regularMedications.filter(medication => getTimeOfDayKey(medication.timeOfDay) === getTimeOfDayKey(group)),
   }));
 
   return (
     <section id="medications-view" className="view-section active">
-      <div className="panel panel-glass mb-4">
-        <div className="panel-header border-bottom">
-          <div className="panel-title-group">
-            <Pill className="color-primary" size={22} />
-            <h3>Medications</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
+        
+        {/* General Medications Panel */}
+        <div className="panel panel-glass">
+          <div className="panel-header border-bottom" style={{ marginBottom: '1rem', paddingBottom: '1rem' }}>
+            <div className="panel-title-group">
+              <Pill className="color-primary" size={22} />
+              <h3>General Medications</h3>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={openAddModal} disabled={loading}>
+              <Plus size={14} style={{ marginRight: '4px' }} /> Add Medication
+            </button>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={openAddModal} disabled={loading}>
-            <Plus size={14} style={{ marginRight: '4px' }} /> Add Medication
-          </button>
-        </div>
 
-        {loading ? (
-          <div className="text-muted py-4 text-center">Loading medications...</div>
-        ) : (
-          <div className="summary-list">
-            {medications.length === 0 ? (
-              <div className="text-muted py-4 text-center">No medications added yet.</div>
-            ) : (
-              medicationsByTimeOfDay.map(({ group, medications: groupedMedications }) => (
+          {loading ? (
+            <div className="text-muted py-4 text-center">Loading medications...</div>
+          ) : regularMedications.length === 0 ? (
+            <div className="text-muted py-4 text-center">No general medications added yet.</div>
+          ) : (
+            <div className="summary-list">
+              {medicationsByTimeOfDay.map(({ group, medications: groupedMedications }) => (
                 groupedMedications.length > 0 ? (
                   <div key={getTimeOfDayKey(group)} className="mb-4">
                     <div className="panel-title-group mb-2">
-                      <h4 style={{ margin: 0 }}>{formatTimeOfDayGroup(group)}</h4>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{formatTimeOfDayGroup(group)}</h4>
                     </div>
                     <div className="summary-list">
                       {groupedMedications.map(medication => (
@@ -227,11 +238,11 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
                           <div>
                             <div className="summary-value">{medication.name}</div>
                             {medication.instructions && (
-                                <div className="text-secondary text-sm">
+                              <div className="text-secondary text-sm">
                                 {medication.instructions}
-                                </div>
+                              </div>
                             )}
-                            </div>
+                          </div>
                           <div className="d-flex gap-2">
                             <button
                               className="btn btn-outline btn-sm"
@@ -253,10 +264,66 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
                     </div>
                   </div>
                 ) : null
-              ))
-            )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Insulin Panel */}
+        <div className="panel panel-glass">
+          <div className="panel-header border-bottom" style={{ marginBottom: '1rem', paddingBottom: '1rem' }}>
+            <div className="panel-title-group">
+              <Syringe className="color-success" size={22} />
+              <h3>Insulin</h3>
+            </div>
+            <button className="btn btn-success btn-sm" onClick={openAddInsulinModal} disabled={loading}>
+              <Plus size={14} style={{ marginRight: '4px' }} /> Add Insulin
+            </button>
           </div>
-        )}
+
+          {loading ? (
+            <div className="text-muted py-4 text-center">Loading insulin...</div>
+          ) : insulinMedications.length === 0 ? (
+            <div className="text-muted py-4 text-center">No insulin entries added yet.</div>
+          ) : (
+            <div className="summary-list">
+              {insulinMedications.map(medication => (
+                <div key={`insulin-${medication.id}`} className="summary-item" style={{ borderLeft: '3px solid var(--color-success)', paddingLeft: '12px' }}>
+                  <div>
+                    <div className="summary-value">{medication.name}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '4px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-success)' }}>
+                        Frequency: {formatTimeOfDayGroup(medication.timeOfDay)}
+                      </span>
+                      {medication.instructions && (
+                        <span className="text-secondary text-sm">
+                          {medication.instructions}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="d-flex gap-2">
+                    <button
+                      className="btn btn-outline btn-sm"
+                      onClick={() => openEditModal(medication)}
+                      title="Edit"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm color-danger"
+                      onClick={() => handleDelete(medication.id)}
+                      title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
 
       {showModal && (
@@ -275,15 +342,41 @@ export const Medications: React.FC<MedicationsProps> = ({ showToast }) => {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="e.g., Aspirin"
+                  placeholder="e.g., Aspirin, Lantus"
                   value={formData.name}
                   disabled={saving}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  onChange={e => {
+                    const name = e.target.value;
+                    const isIns = name.toLowerCase().includes('insulin');
+                    setFormData(prev => ({
+                      ...prev,
+                      name,
+                      isInsulin: isIns ? true : prev.isInsulin
+                    }));
+                  }}
                 />
               </div>
 
               <div className="form-group">
-                <label>Time of Day *</label>
+                <label>Medication Category</label>
+                <div className="radio-group">
+                  <label className="radio-label">
+                    <input
+                      type="checkbox"
+                      checked={formData.isInsulin}
+                      disabled={saving}
+                      onChange={e => setFormData({ ...formData, isInsulin: e.target.checked })}
+                      className="radio-input"
+                    />
+                    <span className="radio-text" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Syringe size={14} className="color-success" style={{ display: 'inline' }} /> This is an Insulin medication
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Time of Day / Frequency *</label>
                 <div className="radio-group">
                   {TIME_OF_DAY_OPTIONS.map(time => (
                     <label key={time} className="radio-label">

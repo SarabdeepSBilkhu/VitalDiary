@@ -211,11 +211,18 @@ async function initDatabase(retries = 15, delay = 4000) {
           name TEXT NOT NULL,
           time_of_day TEXT NOT NULL,
           instructions TEXT,
+          is_insulin INTEGER DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
       `);
+
+      try {
+        await dbQuery.run(`ALTER TABLE medications ADD COLUMN is_insulin INTEGER DEFAULT 0`);
+      } catch (err) {
+        // Column already exists or table doesn't support ALTER
+      }
 
       // Create indexes for efficient retrieval scoped by user and ordered by time
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_vitals_user_time ON vitals(user_id, timestamp DESC)`);

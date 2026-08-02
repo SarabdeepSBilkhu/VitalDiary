@@ -29,6 +29,7 @@ const mapMedicationRow = (row) => ({
   name: row.name,
   timeOfDay: normalizeTimeOfDay(row.time_of_day),
   instructions: row.instructions || '',
+  isInsulin: !!row.is_insulin,
 });
 
 router.get('/', async (req, res) => {
@@ -45,7 +46,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { id, name, timeOfDay, instructions } = req.body;
+  const { id, name, timeOfDay, instructions, isInsulin } = req.body;
 
   if (!name || !Array.isArray(timeOfDay) || timeOfDay.length === 0) {
     return res.status(400).json({ error: 'Medication name and at least one time of day are required.' });
@@ -55,9 +56,9 @@ router.post('/', async (req, res) => {
 
   try {
     await dbQuery.run(
-      `INSERT INTO medications (id, user_id, name, time_of_day, instructions, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [recordId, req.user.id, name.trim(), JSON.stringify(timeOfDay), instructions || '']
+      `INSERT INTO medications (id, user_id, name, time_of_day, instructions, is_insulin, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [recordId, req.user.id, name.trim(), JSON.stringify(timeOfDay), instructions || '', isInsulin ? 1 : 0]
     );
 
     const savedMedication = await dbQuery.get('SELECT * FROM medications WHERE id = ?', [recordId]);
@@ -69,7 +70,7 @@ router.post('/', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const { name, timeOfDay, instructions } = req.body;
+  const { name, timeOfDay, instructions, isInsulin } = req.body;
   const { id } = req.params;
 
   if (!name || !Array.isArray(timeOfDay) || timeOfDay.length === 0) {
@@ -84,9 +85,9 @@ router.put('/:id', async (req, res) => {
 
     await dbQuery.run(
       `UPDATE medications
-       SET name = ?, time_of_day = ?, instructions = ?, updated_at = CURRENT_TIMESTAMP
+       SET name = ?, time_of_day = ?, instructions = ?, is_insulin = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND user_id = ?`,
-      [name.trim(), JSON.stringify(timeOfDay), instructions || '', id, req.user.id]
+      [name.trim(), JSON.stringify(timeOfDay), instructions || '', isInsulin ? 1 : 0, id, req.user.id]
     );
 
     const updatedMedication = await dbQuery.get('SELECT * FROM medications WHERE id = ?', [id]);

@@ -1,7 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import { X, Activity, Thermometer, Weight, FileText } from 'lucide-react';
+import { X, Activity, Thermometer, Weight, FileText, Plus, Trash2 } from 'lucide-react';
 
 const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Urine Report', 'Other Reports'];
+
+interface ReportParameter {
+  name: string;
+  value: string;
+  unit: string;
+}
+
+const REPORT_TEMPLATES: Record<string, ReportParameter[]> = {
+  'CBC': [
+    { name: 'RBC', value: '', unit: 'million/µL' },
+    { name: 'Haemoglobin', value: '', unit: 'g/dL' },
+    { name: 'PCV', value: '', unit: '%' },
+    { name: 'MCV', value: '', unit: 'fL' },
+    { name: 'MCH', value: '', unit: 'pg' },
+    { name: 'MCHC', value: '', unit: 'g/dL' },
+    { name: 'RDW (CV)', value: '', unit: '%' },
+    { name: 'Platelet Count', value: '', unit: 'lakh/µL' },
+    { name: 'TLC', value: '', unit: 'cells/µL' },
+    { name: 'Neutrophils', value: '', unit: '%' },
+    { name: 'Lymphocytes', value: '', unit: '%' },
+    { name: 'Monocytes', value: '', unit: '%' },
+    { name: 'Eosinophils', value: '', unit: '%' },
+    { name: 'Basophils', value: '', unit: '%' },
+    { name: 'Absolute Neutrophils', value: '', unit: 'cells/µL' },
+    { name: 'Absolute Lymphocytes', value: '', unit: 'cells/µL' },
+    { name: 'Absolute Monocytes', value: '', unit: 'cells/µL' },
+    { name: 'Absolute Eosinophils', value: '', unit: 'cells/µL' },
+    { name: 'Absolute Basophils', value: '', unit: 'cells/µL' },
+    { name: 'ESR', value: '', unit: 'mm/hr' },
+  ],
+  'LFT': [
+    { name: 'Total Bilirubin', value: '', unit: 'mg/dL' },
+    { name: 'Direct Bilirubin', value: '', unit: 'mg/dL' },
+    { name: 'Indirect Bilirubin', value: '', unit: 'mg/dL' },
+    { name: 'SGOT (AST)', value: '', unit: 'U/L' },
+    { name: 'SGPT (ALT)', value: '', unit: 'U/L' },
+    { name: 'ALP', value: '', unit: 'U/L' },
+    { name: 'Total Protein', value: '', unit: 'g/dL' },
+    { name: 'Albumin', value: '', unit: 'g/dL' },
+    { name: 'Globulin', value: '', unit: 'g/dL' },
+    { name: 'A/G Ratio', value: '', unit: '' },
+    { name: 'GGT', value: '', unit: 'U/L' },
+  ],
+  'RFT': [
+    { name: 'Blood Urea', value: '', unit: 'mg/dL' },
+    { name: 'BUN', value: '', unit: 'mg/dL' },
+    { name: 'Creatinine', value: '', unit: 'mg/dL' },
+    { name: 'Uric Acid', value: '', unit: 'mg/dL' },
+    { name: 'Sodium', value: '', unit: 'mEq/L' },
+    { name: 'Potassium', value: '', unit: 'mEq/L' },
+    { name: 'Chloride', value: '', unit: 'mEq/L' },
+    { name: 'BUN/Creatinine Ratio', value: '', unit: '' },
+  ],
+  'Lipid Profile': [
+    { name: 'Total Cholesterol', value: '', unit: 'mg/dL' },
+    { name: 'HDL', value: '', unit: 'mg/dL' },
+    { name: 'LDL', value: '', unit: 'mg/dL' },
+    { name: 'VLDL', value: '', unit: 'mg/dL' },
+    { name: 'Triglycerides', value: '', unit: 'mg/dL' },
+    { name: 'Chol/HDL Ratio', value: '', unit: '' },
+    { name: 'HDL/LDL Ratio', value: '', unit: '' },
+    { name: 'LDL/HDL Ratio', value: '', unit: '' },
+  ],
+  'Thyroid Profile': [
+    { name: 'FT3', value: '', unit: 'pg/mL' },
+    { name: 'FT4', value: '', unit: 'ng/dL' },
+    { name: 'TSH', value: '', unit: 'mIU/L' },
+  ],
+  'HbA1c': [
+    { name: 'HbA1c', value: '', unit: '%' },
+    { name: 'Estimated Average Glucose (eAG)', value: '', unit: 'mg/dL' },
+  ],
+  'Urine Report': [
+    { name: 'Culture', value: '', unit: '' },
+    { name: 'Organism Isolated', value: '', unit: '' },
+    { name: 'Susceptibility', value: '', unit: '' },
+    { name: 'Colour', value: '', unit: '' },
+    { name: 'Appearance', value: '', unit: '' },
+    { name: 'pH', value: '', unit: '' },
+    { name: 'Specific Gravity', value: '', unit: '' },
+    { name: 'Protein', value: '', unit: '' },
+    { name: 'Leukocyte Esterase', value: '', unit: '' },
+    { name: 'Pus Cells', value: '', unit: 'HPF' },
+    { name: 'Epithelial Cells', value: '', unit: 'HPF' },
+  ],
+  'Other Reports': [
+    { name: 'hs-CRP', value: '', unit: 'mg/L' },
+    { name: 'Iron', value: '', unit: 'µg/dL' },
+    { name: 'TIBC', value: '', unit: 'µg/dL' },
+    { name: 'Transferrin Saturation', value: '', unit: '%' },
+    { name: 'Vitamin D (25-OH)', value: '', unit: 'ng/mL' },
+    { name: 'Vitamin B12', value: '', unit: 'pg/mL' },
+  ],
+};
+
+const parseReportData = (raw: string): ReportParameter[] => {
+  if (!raw) return [{ name: '', value: '', unit: '' }];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((p: any) => ({ name: p.name || '', value: p.value || '', unit: p.unit || '' }));
+    }
+    // Object format fallback
+    return Object.entries(parsed).map(([name, value]) => ({ name, value: String(value), unit: '' }));
+  } catch {
+    // Legacy comma-separated or plain text — put it all in a single custom row
+    return [{ name: 'Notes', value: raw, unit: '' }];
+  }
+};
 
 interface LogModalProps {
   isOpen: boolean;
@@ -55,7 +164,7 @@ export const LogModal: React.FC<LogModalProps> = ({
   // Medical Reports State
   const [reportDate, setReportDate] = useState('');
   const [reportType, setReportType] = useState('CBC');
-  const [reportData, setReportData] = useState('');
+  const [reportParameters, setReportParameters] = useState<ReportParameter[]>(REPORT_TEMPLATES['CBC'].map(p => ({ ...p })));
   const [reportNotes, setReportNotes] = useState('');
 
   const [loading, setLoading] = useState(false);
@@ -88,7 +197,7 @@ export const LogModal: React.FC<LogModalProps> = ({
           setActiveTab('reports');
           setReportDate(formatted);
           setReportType(logToEdit.report_type);
-          setReportData(logToEdit.data || '');
+          setReportParameters(parseReportData(logToEdit.data || ''));
           setReportNotes(logToEdit.notes || '');
         } else {
           // Weight
@@ -123,7 +232,7 @@ export const LogModal: React.FC<LogModalProps> = ({
 
         setReportDate(formatted);
         setReportType('CBC');
-        setReportData('');
+        setReportParameters(REPORT_TEMPLATES['CBC'].map(p => ({ ...p })));
         setReportNotes('');
       }
     }
@@ -234,10 +343,37 @@ export const LogModal: React.FC<LogModalProps> = ({
     }
   };
 
+  const handleReportTypeChange = (newType: string) => {
+    setReportType(newType);
+    // Only auto-fill template if all current params are empty or came from a previous template
+    const hasUserData = reportParameters.some(p => p.value.trim() !== '');
+    if (!hasUserData) {
+      const template = REPORT_TEMPLATES[newType] || [{ name: '', value: '', unit: '' }];
+      setReportParameters(template.map(p => ({ ...p })));
+    }
+  };
+
+  const updateParameter = (index: number, field: keyof ReportParameter, value: string) => {
+    setReportParameters(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
+  };
+
+  const addParameter = () => {
+    setReportParameters(prev => [...prev, { name: '', value: '', unit: '' }]);
+  };
+
+  const removeParameter = (index: number) => {
+    setReportParameters(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportDate || !reportType || !reportData) {
+    if (!reportDate || !reportType) {
       showToast('Please fill out all required fields.', 'warning');
+      return;
+    }
+    const filledParams = reportParameters.filter(p => p.name.trim() !== '' && p.value.trim() !== '');
+    if (filledParams.length === 0) {
+      showToast('Please enter at least one lab parameter with a value.', 'warning');
       return;
     }
 
@@ -247,7 +383,7 @@ export const LogModal: React.FC<LogModalProps> = ({
         id: logToEdit ? logToEdit.id : undefined,
         timestamp: new Date(reportDate).toISOString(),
         report_type: reportType,
-        data: reportData,
+        data: JSON.stringify(filledParams),
         notes: reportNotes
       });
       onClose();
@@ -540,7 +676,7 @@ export const LogModal: React.FC<LogModalProps> = ({
         {activeTab === 'reports' && (
           <form onSubmit={handleReportSubmit} className="modal-tab-content active">
             <div className="form-grid">
-              <div className="form-group grid-col-2">
+              <div className="form-group">
                 <label htmlFor="modal-report-date">Date & Time *</label>
                 <input 
                   type="datetime-local" 
@@ -558,7 +694,7 @@ export const LogModal: React.FC<LogModalProps> = ({
                   id="modal-report-type" 
                   className="form-control"
                   value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
+                  onChange={(e) => handleReportTypeChange(e.target.value)}
                   required
                 >
                   {REPORT_TYPE_OPTIONS.map(option => (
@@ -566,31 +702,151 @@ export const LogModal: React.FC<LogModalProps> = ({
                   ))}
                 </select>
               </div>
+            </div>
 
-              <div className="form-group grid-col-2">
-                <label htmlFor="modal-report-data">Lab Results / Reference Ranges *</label>
-                <textarea 
-                  id="modal-report-data" 
-                  rows={4} 
-                  className="form-control font-monospace" 
-                  placeholder="Manually type details (e.g. Hb: 13.5, Cholesterol: 190, Creatinine: 0.9)"
-                  value={reportData}
-                  onChange={(e) => setReportData(e.target.value)}
-                  required
-                ></textarea>
+            {/* Parameter Builder */}
+            <div style={{ marginTop: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Lab Parameters *
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={addParameter}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Plus size={13} /> Add Row
+                </button>
               </div>
 
-              <div className="form-group grid-col-2">
-                <label htmlFor="modal-report-notes">Doctor / Facility / Notes</label>
-                <textarea 
-                  id="modal-report-notes" 
-                  rows={2} 
-                  className="form-control" 
-                  placeholder="Prescribed by Dr. Smith, City Clinic"
-                  value={reportNotes}
-                  onChange={(e) => setReportNotes(e.target.value)}
-                ></textarea>
+              <div style={{
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--border-radius-md)',
+                overflow: 'hidden',
+                background: 'var(--bg-surface-elevated)',
+              }}>
+                {/* Header Row */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '3fr 2fr 2fr auto',
+                  gap: '0',
+                  padding: '0.5rem 0.75rem',
+                  background: 'var(--bg-surface)',
+                  borderBottom: '1px solid var(--border-color)',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
+                  <span>Parameter / Test Name</span>
+                  <span style={{ paddingLeft: '0.5rem' }}>Value</span>
+                  <span style={{ paddingLeft: '0.5rem' }}>Unit</span>
+                  <span></span>
+                </div>
+
+                {/* Parameter Rows */}
+                <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                  {reportParameters.map((param, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '3fr 2fr 2fr auto',
+                        gap: '0',
+                        borderBottom: index < reportParameters.length - 1 ? '1px solid var(--border-color)' : 'none',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="e.g. Hemoglobin"
+                        value={param.name}
+                        onChange={e => updateParameter(index, 'name', e.target.value)}
+                        style={{
+                          padding: '0.55rem 0.75rem',
+                          background: 'transparent',
+                          border: 'none',
+                          borderRight: '1px solid var(--border-color)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.875rem',
+                          width: '100%',
+                          outline: 'none',
+                        }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="e.g. 13.5"
+                        value={param.value}
+                        onChange={e => updateParameter(index, 'value', e.target.value)}
+                        style={{
+                          padding: '0.55rem 0.75rem',
+                          background: 'transparent',
+                          border: 'none',
+                          borderRight: '1px solid var(--border-color)',
+                          color: 'var(--color-primary)',
+                          fontWeight: 600,
+                          fontSize: '0.875rem',
+                          width: '100%',
+                          outline: 'none',
+                        }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="e.g. g/dL"
+                        value={param.unit}
+                        onChange={e => updateParameter(index, 'unit', e.target.value)}
+                        style={{
+                          padding: '0.55rem 0.75rem',
+                          background: 'transparent',
+                          border: 'none',
+                          borderRight: '1px solid var(--border-color)',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.8rem',
+                          width: '100%',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeParameter(index)}
+                        title="Remove row"
+                        style={{
+                          padding: '0.55rem 0.65rem',
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'color 0.2s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-danger)')}
+                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+                Tip: Selecting a report type auto-fills standard parameters. You can edit names, values, units, or add custom rows.
+              </p>
+            </div>
+
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label htmlFor="modal-report-notes">Doctor / Facility / Notes</label>
+              <textarea 
+                id="modal-report-notes" 
+                rows={2} 
+                className="form-control" 
+                placeholder="Prescribed by Dr. Smith, City Clinic"
+                value={reportNotes}
+                onChange={(e) => setReportNotes(e.target.value)}
+              ></textarea>
             </div>
             
             <div className="modal-footer">

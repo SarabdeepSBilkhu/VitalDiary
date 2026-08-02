@@ -29,8 +29,9 @@ export interface ProfileRecord {
 export interface MedicationRecord {
   id: string;
   name: string;
-  timeOfDay: Array<'morning' | 'afternoon' | 'night' | 'sos'>;
+  timeOfDay: Array<'morning' | 'afternoon' | 'night' | 'insulin' | 'sos'>;
   instructions: string;
+  isInsulin?: boolean;
 }
 
 export interface ReportRecord {
