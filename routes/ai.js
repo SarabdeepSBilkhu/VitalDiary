@@ -25,87 +25,43 @@ router.post('/chat', async (req, res) => {
     const profile = await dbQuery.get('SELECT * FROM profiles WHERE user_id = ?', [userId]) || {};
     
     // Fetch user medications
-    const medications = await dbQuery.all('SELECT name, time_of_day, instructions FROM medications WHERE user_id = ?', [userId]);
+    const medications = await dbQuery.all('SELECT name, time_of_day FROM medications WHERE user_id = ?', [userId]);
 
-    // Fetch recent logs
-    const vitals = await dbQuery.all('SELECT timestamp, systolic, diastolic, hr, spo2, notes FROM vitals WHERE user_id = ? ORDER BY timestamp DESC LIMIT 15', [userId]);
-    const glucose = await dbQuery.all('SELECT timestamp, value, context, notes FROM glucose WHERE user_id = ? ORDER BY timestamp DESC LIMIT 15', [userId]);
-    const weight = await dbQuery.all('SELECT timestamp, value, notes FROM weight WHERE user_id = ? ORDER BY timestamp DESC LIMIT 15', [userId]);
-    const reports = await dbQuery.all('SELECT timestamp, report_type, title, data, notes FROM reports WHERE user_id = ? ORDER BY timestamp DESC LIMIT 10', [userId]);
+    // Fetch aggregated stats from DB directly — no raw rows needed
+    const vitalsStats  = await dbQuery.get(`SELECT ROUND(AVG(systolic),0) AS avg_sys, MIN(systolic) AS min_sys, MAX(systolic) AS max_sys, ROUND(AVG(diastolic),0) AS avg_dia, ROUND(AVG(hr),0) AS avg_hr, ROUND(AVG(spo2),1) AS avg_spo2, COUNT(*) AS n FROM vitals WHERE user_id = ?`, [userId]);
+    const glucoseStats = await dbQuery.get(`SELECT ROUND(AVG(value),0) AS avg_gl,  MIN(value) AS min_gl,  MAX(value) AS max_gl,  COUNT(*) AS n FROM glucose WHERE user_id = ?`, [userId]);
+    const weightStats  = await dbQuery.get(`SELECT ROUND(AVG(value),1) AS avg_wt,  MIN(value) AS min_wt,  MAX(value) AS max_wt,  COUNT(*) AS n FROM weight  WHERE user_id = ?`, [userId]);
+    const recentReports = await dbQuery.all('SELECT report_type, title FROM reports WHERE user_id = ? ORDER BY timestamp DESC LIMIT 5', [userId]);
 
-    // Construct context
-    const profileText = `
-Name: ${profile.name || 'Not provided'}
-Age: ${profile.age || 'Not provided'}
-Gender: ${profile.gender || 'Not provided'}
-Blood Group: ${profile.blood_group || 'Not provided'}
-Height: ${profile.height || 'Not provided'}
-Allergies: ${profile.allergies || 'None listed'}
-Emergency Contact: ${profile.emergency_contact || 'Not provided'}
-    `.trim();
+    // Helper
+    const avg = (s, label) => s && s.n ? `${label}: avg ${s[Object.keys(s)[0]]}, min ${s[Object.keys(s)[1]]}, max ${s[Object.keys(s)[2]]} (${s.n} readings)` : `${label}: no data`;
 
-    const medicationsText = medications.length > 0 
-      ? medications.map(m => `- ${m.name} (Schedule: ${m.time_of_day}, Instructions: ${m.instructions || 'None'})`).join('\n')
-      : 'No active medications logged.';
+    const systemPrompt = `You are VitalDiary AI, a compassionate health assistant with access to the user's health summary.
 
-    const vitalsText = vitals.length > 0
-      ? vitals.map(v => `- [${v.timestamp}] BP: ${v.systolic}/${v.diastolic} mmHg, HR: ${v.hr} bpm, SpO2: ${v.spo2 || 'N/A'}% (Notes: ${v.notes || 'None'})`).join('\n')
-      : 'No vitals records logged.';
+Profile: ${profile.name || 'User'}, Age ${profile.age || '?'}, ${profile.gender || '?'}, Blood Group ${profile.blood_group || '?'}, Height ${profile.height || '?'}, Allergies: ${profile.allergies || 'none'}.
 
-    const glucoseText = glucose.length > 0
-      ? glucose.map(g => `- [${g.timestamp}] Value: ${g.value} mg/dL (${g.context}) (Notes: ${g.notes || 'None'})`).join('\n')
-      : 'No glucose records logged.';
+Medications: ${medications.length ? medications.map(m => `${m.name} (${m.time_of_day})`).join(', ') : 'none'}.
 
-    const weightText = weight.length > 0
-      ? weight.map(w => `- [${w.timestamp}] Weight: ${w.value} kg (Notes: ${w.notes || 'None'})`).join('\n')
-      : 'No weight records logged.';
+Health Stats (all-time):
+- BP: avg ${vitalsStats?.avg_sys}/${vitalsStats?.avg_dia} mmHg, systolic ${vitalsStats?.min_sys}–${vitalsStats?.max_sys}, HR avg ${vitalsStats?.avg_hr} bpm, SpO2 avg ${vitalsStats?.avg_spo2}% (${vitalsStats?.n || 0} readings)
+- Glucose: avg ${glucoseStats?.avg_gl} mg/dL, range ${glucoseStats?.min_gl}–${glucoseStats?.max_gl} (${glucoseStats?.n || 0} readings)
+- Weight: avg ${weightStats?.avg_wt} kg, range ${weightStats?.min_wt}–${weightStats?.max_wt} (${weightStats?.n || 0} readings)
+- Recent reports: ${recentReports.length ? recentReports.map(r => `${r.report_type}: ${r.title}`).join('; ') : 'none'}
 
-    const reportsText = reports.length > 0
-      ? reports.map(r => `- [${r.timestamp}] [${r.report_type}] Title: ${r.title}\n  Findings: ${r.data || 'None'}\n  Notes: ${r.notes || 'None'}`).join('\n')
-      : 'No medical reports logged.';
+Guidelines: Be concise, empathetic, and use Markdown. Always end with: *Disclaimer: I am an AI, not a doctor. Consult a qualified healthcare professional before making health decisions.*`.trim();
 
-    const systemPrompt = `
-You are VitalDiary AI, a highly intelligent and compassionate health assistant.
-You have access to the user's secure health logs to provide personalized, context-aware answers.
-
-User Health Context:
-=== Profile ===
-${profileText}
-
-=== Active Medications ===
-${medicationsText}
-
-=== Recent Vitals Logs (Last 15) ===
-${vitalsText}
-
-=== Recent Glucose Logs (Last 15) ===
-${glucoseText}
-
-=== Recent Weight Logs (Last 15) ===
-${weightText}
-
-=== Medical Reports (Last 10) ===
-${reportsText}
-=== End of Context ===
-
-Guidelines:
-1. Provide accurate, personalized, and empathetic health insights based on the provided logs.
-2. Structure your response cleanly using Markdown (bullet points, bold text, clear sections).
-3. If the user asks about trends, refer to their logs. For example, check if their blood pressure or glucose has been high or low.
-4. Keep answers clear, supportive, and informative.
-5. ALWAYS add a disclaimer at the end of every response:
-   "*Disclaimer: I am an AI health assistant, not a doctor. This analysis is for informational purposes only and does not constitute medical advice. Please consult a qualified healthcare professional before making any health or medication decisions.*"
-`.trim();
+    // Cap conversation history to last 6 messages (3 turns)
+    const recentMessages = messages.slice(-6);
 
     // Prepare payload for Groq
     const groqPayload = {
       model: 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: systemPrompt },
-        ...messages
+        ...recentMessages
       ],
       temperature: 0.7,
-      max_tokens: 1024
+      max_tokens: 1500
     };
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
