@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx-js-style';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
-import { parseAllReportParameters, getLatestReportsByType, getReportTypeFromRecord } from '../utils/reportUtils';
+import { parseAllReportParameters, getLatestReportsByType, getReportTypeFromRecord, formatReportDataAsText } from '../utils/reportUtils';
 
 type ExportPreset = '7days' | '30days' | '90days' | '1year' | 'all' | 'custom';
 
@@ -128,7 +128,7 @@ export const Settings: React.FC<SettingsProps> = ({
         csvContent += `Weight,${w.timestamp},,,,,,,,${w.value},,,,${(w.notes || '').replace(/"/g, '""')}\r\n`;
       } else if (type === 'reports') {
         const r = log as ReportRecord;
-        csvContent += `Report,${r.timestamp},,,,,,,,${r.report_type},"${(r.data || '').replace(/"/g, '""')}","${(r.notes || '').replace(/"/g, '""')}"\r\n`;
+        csvContent += `Report,${r.timestamp},,,,,,,,${r.report_type},"${formatReportDataAsText(r.data || '').replace(/"/g, '""')}","${(r.notes || '').replace(/"/g, '""')}"\r\n`;
       }
     });
 
@@ -233,7 +233,7 @@ export const Settings: React.FC<SettingsProps> = ({
       const reportsData = reportsFiltered.map(r => ({
         "Date & Time": fmtDT(r.timestamp),
         "Report Type": r.report_type,
-        "Lab Results": r.data || '',
+        "Lab Results": formatReportDataAsText(r.data || ''),
         "Notes": r.notes || ''
       }));
       const wsReports = XLSX.utils.json_to_sheet(reportsData);

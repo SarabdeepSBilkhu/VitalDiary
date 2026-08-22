@@ -1,15 +1,51 @@
 import type { ReportRecord } from './api';
 
+// ─── Structured Report Parameter Type ───────────────────────────────────────
+export interface ReportParameter {
+  name: string;
+  value: string;
+  unit: string;
+}
+
+// ─── JSON Array Format Detection ────────────────────────────────────────────
+// New format: [{"name":"...","value":"...","unit":"..."}]
+// Old format: "Hb: 14.5 g/dL", "WBC=8.2", etc.
+function tryParseJsonParameters(text: string): ReportParameter[] | null {
+  if (!text || !text.trim().startsWith('[')) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed) && parsed.length > 0 && 'name' in parsed[0]) {
+      return parsed as ReportParameter[];
+    }
+  } catch {
+    // Not valid JSON, fall through
+  }
+  return null;
+}
+
 // ─── Report Parameter Parser ────────────────────────────────────────────────
 // Extracts named numeric parameters from free-text report data.
 // Supports formats like:
 //   "Hb: 14.5 g/dL", "WBC=8.2", "Glucose 95 mg/dL", "Creatinine : 1.1"
 //   Also handles quoted entries: "RBC: 3.86", "Haemoglobin: 9.8"
+//   And the new JSON array format: [{name, value, unit}]
 export function parseReportParameters(text: string): Record<string, number> {
   const result: Record<string, number> = {};
   if (!text) return result;
 
-  // Strip surrounding quote characters so entries like "Key: Value" are parsed correctly
+  // Try new structured JSON format first
+  const jsonParams = tryParseJsonParameters(text);
+  if (jsonParams) {
+    for (const item of jsonParams) {
+      const val = parseFloat(item.value);
+      if (item.name && !isNaN(val)) {
+        result[item.name] = val;
+      }
+    }
+    return result;
+  }
+
+  // Legacy format: strip surrounding quote characters so entries like "Key: Value" are parsed correctly
   const cleaned = text.replace(/['"]/g, '');
 
   // Pattern: word(s) + optional colon/equals + numeric value (unit ignored)
@@ -31,6 +67,18 @@ export function parseAllReportParameters(text: string): Record<string, string> {
   const result: Record<string, string> = {};
   if (!text) return result;
 
+  // Try new structured JSON format first
+  const jsonParams = tryParseJsonParameters(text);
+  if (jsonParams) {
+    for (const item of jsonParams) {
+      if (item.name && item.value !== undefined) {
+        result[item.name] = item.unit ? `${item.value} ${item.unit}` : item.value;
+      }
+    }
+    return result;
+  }
+
+  // Legacy format
   const items: string[] = [];
   const itemRegex = /"([^"]+)"|'([^']+)'|([^,\n]+)/g;
   let match: RegExpExecArray | null;
@@ -65,6 +113,20 @@ export function parseAllReportParameters(text: string): Record<string, string> {
     }
   }
   return result;
+}
+
+// ─── Plain-text formatter for exports (CSV / XLSX / PDF fallback) ────────────
+// Converts report data (either format) into a readable "Name: Value Unit" string.
+export function formatReportDataAsText(text: string): string {
+  if (!text) return '';
+  const jsonParams = tryParseJsonParameters(text);
+  if (jsonParams) {
+    return jsonParams
+      .map(item => `${item.name}: ${item.value}${item.unit ? ' ' + item.unit : ''}`)
+      .join(', ');
+  }
+  // Legacy format — return as-is (already human-readable)
+  return text;
 }
 
 export const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Urine Report', 'Other Reports'] as const;

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, CalendarCheck, Plus, Activity, Thermometer, 
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import type { WeightRecord, ReportRecord } from '../utils/api';
 import { evaluateBP, evaluateGlucose } from '../utils/evaluators';
+import { formatReportDataAsText } from '../utils/reportUtils';
 
 interface CalendarViewProps {
   vitals: VitalsRecord[];
@@ -319,8 +320,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           </span>
                         </div>
                         {reportLog.data && (
-                          <div className="text-sm text-secondary mt-1 font-monospace" style={{ whiteSpace: 'pre-wrap', padding: '0.25rem', background: 'rgba(0,0,0,0.05)', borderRadius: '4px' }}>
-                            {reportLog.data}
+                          <div className="text-sm text-secondary mt-1" style={{ padding: '0.25rem', background: 'rgba(0,0,0,0.05)', borderRadius: '4px' }}>
+                            {formatReportDataAsText(reportLog.data)}
                           </div>
                         )}
                         {reportLog.notes && (
