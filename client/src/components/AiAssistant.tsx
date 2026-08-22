@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, RefreshCw, AlertTriangle, HelpCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '../utils/api';
 
 interface Message {
@@ -151,7 +152,7 @@ export const AiAssistant: React.FC<AiAssistantProps> = ({ showToast }) => {
                 <p className="m-0" style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</p>
               ) : (
                 <div className="ai-markdown">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                 </div>
               )}
             </div>

@@ -2190,6 +2190,51 @@ select.form-control {
   color: var(--text-secondary);
 }
 
+/* Tables */
+.ai-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0 1rem 0;
+  font-size: 0.82rem;
+  overflow-x: auto;
+  display: block;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.ai-markdown thead {
+  background: var(--color-primary-light);
+}
+
+.ai-markdown th {
+  padding: 0.55rem 0.85rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-primary);
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.ai-markdown td {
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.ai-markdown tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ai-markdown tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.ai-markdown tbody tr:hover {
+  background: var(--color-primary-light);
+  transition: background 0.15s ease;
+}
+
 /* Disclaimer line styling (italic line at bottom) */
 .ai-markdown em:only-child,
 .ai-markdown p:last-child > em {
