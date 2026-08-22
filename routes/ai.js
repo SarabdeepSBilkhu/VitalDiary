@@ -28,9 +28,9 @@ router.post('/chat', async (req, res) => {
     const medications = await dbQuery.all('SELECT name, time_of_day FROM medications WHERE user_id = ?', [userId]);
 
     // Fetch aggregated stats from DB directly — no raw rows needed
-    const vitalsStats  = await dbQuery.get(`SELECT ROUND(AVG(systolic),0) AS avg_sys, MIN(systolic) AS min_sys, MAX(systolic) AS max_sys, ROUND(AVG(diastolic),0) AS avg_dia, ROUND(AVG(hr),0) AS avg_hr, ROUND(AVG(spo2),1) AS avg_spo2, COUNT(*) AS n FROM vitals WHERE user_id = ?`, [userId]);
-    const glucoseStats = await dbQuery.get(`SELECT ROUND(AVG(value),0) AS avg_gl,  MIN(value) AS min_gl,  MAX(value) AS max_gl,  COUNT(*) AS n FROM glucose WHERE user_id = ?`, [userId]);
-    const weightStats  = await dbQuery.get(`SELECT ROUND(AVG(value),1) AS avg_wt,  MIN(value) AS min_wt,  MAX(value) AS max_wt,  COUNT(*) AS n FROM weight  WHERE user_id = ?`, [userId]);
+    const vitalsStats  = await dbQuery.get(`SELECT ROUND(CAST(AVG(systolic) AS NUMERIC), 0) AS avg_sys, MIN(systolic) AS min_sys, MAX(systolic) AS max_sys, ROUND(CAST(AVG(diastolic) AS NUMERIC), 0) AS avg_dia, ROUND(CAST(AVG(hr) AS NUMERIC), 0) AS avg_hr, ROUND(CAST(AVG(spo2) AS NUMERIC), 1) AS avg_spo2, COUNT(*) AS n FROM vitals WHERE user_id = ?`, [userId]);
+    const glucoseStats = await dbQuery.get(`SELECT ROUND(CAST(AVG(value) AS NUMERIC), 0) AS avg_gl,  MIN(value) AS min_gl,  MAX(value) AS max_gl,  COUNT(*) AS n FROM glucose WHERE user_id = ?`, [userId]);
+    const weightStats  = await dbQuery.get(`SELECT ROUND(CAST(AVG(value) AS NUMERIC), 1) AS avg_wt,  MIN(value) AS min_wt,  MAX(value) AS max_wt,  COUNT(*) AS n FROM weight  WHERE user_id = ?`, [userId]);
     const recentReports = await dbQuery.all('SELECT report_type, title FROM reports WHERE user_id = ? ORDER BY timestamp DESC LIMIT 5', [userId]);
 
     // Helper
