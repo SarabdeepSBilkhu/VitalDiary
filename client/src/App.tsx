@@ -358,7 +358,6 @@ export const App: React.FC = () => {
       <>
         <AdminDashboard
           showToast={showToast}
-          onPatientSwitched={handleRefreshData}
           theme={theme}
           setTheme={setTheme}
           onLogout={handleLogout}

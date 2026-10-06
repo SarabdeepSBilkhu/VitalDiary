@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, Loader2, LogOut, Sun, Moon, LayoutDashboard,
-  Shield, Activity, Droplets, Weight, FileText, Trash2,
+  Shield, Activity, Droplets, FileText, Trash2,
   ChevronRight, BarChart3, UserX, RefreshCw, Eye
 } from 'lucide-react';
 import { api, getCurrentUser } from '../utils/api';
-import { CaregiverPatientView } from './CaregiverPatientView';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import type { WeightRecord, ReportRecord } from '../utils/api';
 import type { ToastType } from './Toast';
 
 interface AdminDashboardProps {
   showToast: (msg: string, type?: ToastType['type']) => void;
-  onPatientSwitched: () => void;
   theme: 'dark' | 'light';
   setTheme: (theme: 'dark' | 'light') => void;
   onLogout: () => void;
@@ -37,7 +35,7 @@ interface AdminStats {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  showToast, onPatientSwitched, theme, setTheme, onLogout
+  showToast, theme, setTheme, onLogout
 }) => {
   const [activeView, setActiveView] = useState<'overview' | 'patients' | 'patient-detail'>('overview');
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -308,18 +306,78 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     return (
-      <CaregiverPatientView
-        patientInfo={selectedPatient}
-        vitals={patientVitals}
-        glucose={patientGlucose}
-        weights={patientWeights}
-        reports={patientReports}
-        allLogs={allPatientLogs}
-        healthAlerts={[]}
-        userEmail={user?.email || 'Admin'}
-        showToast={showToast}
-        onOpenLogModal={() => {}}
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* Patient Info Card */}
+        <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--border)', borderRadius: '1rem' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Patient Info</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
+            {[
+              { label: 'Name', value: selectedPatient.name || 'N/A' },
+              { label: 'Email', value: selectedPatient.email },
+              { label: 'Age', value: selectedPatient.age || 'N/A' },
+              { label: 'Gender', value: selectedPatient.gender || 'N/A' },
+              { label: 'Blood Group', value: selectedPatient.blood_group || 'N/A' },
+              { label: 'Joined', value: new Date(selectedPatient.created_at).toLocaleDateString() },
+            ].map(({ label, value }) => (
+              <div key={label}>
+                <div className="text-secondary text-sm">{label}</div>
+                <div style={{ fontWeight: 500, marginTop: '0.2rem' }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Summary Stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
+          {[
+            { label: 'Vital Readings', value: patientVitals.length, icon: <Activity size={18} />, color: 'hsl(355, 78%, 56%)' },
+            { label: 'Glucose Logs', value: patientGlucose.length, icon: <Droplets size={18} />, color: 'hsl(35, 90%, 55%)' },
+            { label: 'Weight Logs', value: patientWeights.length, icon: <FileText size={18} />, color: 'hsl(200, 85%, 55%)' },
+            { label: 'Reports', value: patientReports.length, icon: <FileText size={18} />, color: 'hsl(150, 80%, 40%)' },
+          ].map((stat, i) => (
+            <div key={i} className="card" style={{
+              padding: '1.25rem', border: '1px solid var(--border)', borderRadius: '0.875rem',
+              display: 'flex', alignItems: 'center', gap: '0.75rem'
+            }}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '0.625rem',
+                background: `${stat.color}22`, display: 'flex',
+                alignItems: 'center', justifyContent: 'center', color: stat.color, flexShrink: 0
+              }}>{stat.icon}</div>
+              <div>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 }}>{stat.value}</div>
+                <div className="text-secondary text-sm" style={{ marginTop: '0.2rem' }}>{stat.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Recent Logs */}
+        <div className="card" style={{ padding: '1.5rem', border: '1px solid var(--border)', borderRadius: '1rem' }}>
+          <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', fontWeight: 600 }}>Recent Activity</h3>
+          {allPatientLogs.length === 0 ? (
+            <p className="text-secondary text-sm text-center py-4">No records found for this patient.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {allPatientLogs.slice(0, 20).map((log: any, i: number) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                  padding: '0.625rem 0.75rem', borderRadius: '0.5rem',
+                  background: 'var(--surface)', fontSize: '0.875rem'
+                }}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: '99px', fontSize: '0.75rem', fontWeight: 600,
+                    background: log.type === 'vitals' ? 'rgba(220,53,69,0.15)' : log.type === 'glucose' ? 'rgba(255,167,38,0.15)' : 'rgba(23,162,184,0.15)',
+                    color: log.type === 'vitals' ? 'hsl(355,78%,56%)' : log.type === 'glucose' ? 'hsl(35,90%,55%)' : 'hsl(200,85%,55%)',
+                    textTransform: 'capitalize', flexShrink: 0
+                  }}>{log.type}</span>
+                  <span className="text-secondary" style={{ flex: 1 }}>{new Date(log.timestamp).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
