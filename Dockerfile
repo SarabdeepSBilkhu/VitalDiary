@@ -32,8 +32,5 @@ COPY --from=builder /app/client/dist ./client/dist
 # Expose the application port
 EXPOSE 8080
 
-# Define volume for local SQLite database to persist across container restarts
-VOLUME ["/app/vitaldiary.db"]
-
 # Start the Node.js server
 CMD ["npm", "start"]
