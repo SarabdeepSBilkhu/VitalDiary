@@ -15,7 +15,7 @@ RUN npm run build
 FROM node:22-alpine
 
 # Install SQLite dependencies (sqlite3 and sqlite-vec require compilation)
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 py3-setuptools make g++
 
 WORKDIR /app
 
