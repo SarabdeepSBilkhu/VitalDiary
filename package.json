@@ -9,7 +9,6 @@
     "client": "npm run dev --prefix client",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "build": "npm run build --prefix client",
-    "postinstall": "npm install --prefix client",
     "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand"
   },
   "dependencies": {
@@ -39,6 +38,6 @@
     "supertest": "^7.2.2"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22"
   }
 }
