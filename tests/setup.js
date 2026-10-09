@@ -1,5 +1,8 @@
 const { initDatabase, getDbReady, dbQuery } = require('../database');
 
+// Increase default timeout for heavy local transformer operations
+jest.setTimeout(30000);
+
 // Wait for database initialization before running tests
 beforeAll(async () => {
   await initDatabase();
