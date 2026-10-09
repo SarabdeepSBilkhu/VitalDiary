@@ -212,8 +212,8 @@ describe('VitalDiary AI Optimization', () => {
       expect(res.body.reply.content).toContain('120/80');
 
       // Verify payload parameters
-      expect(interceptedPayload.model).toEqual('llama-3.3-70b-versatile');
-      expect(interceptedPayload.max_tokens).toEqual(300);
+      expect(interceptedPayload.model).toEqual('openai/gpt-oss-120b');
+      expect(interceptedPayload.max_tokens).toEqual(500);
       expect(interceptedPayload.temperature).toEqual(0.3);
 
       // Verify token usage logging

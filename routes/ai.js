@@ -391,6 +391,16 @@ async function callGroqWithRetry(apiKey, payload, maxRetries = 2) {
         };
       }
 
+      // 404: Model not found or endpoint not found
+      if (status === 404) {
+        console.error(`Groq API Model Not Found (Status 404): ${providerError}`);
+        return {
+          success: false,
+          status: 502,
+          clientMessage: `Configured AI model was not found or is unavailable: ${providerError}`
+        };
+      }
+
       // 429: Rate limit or 5xx: Server errors - retry with bounded backoff
       if ((status === 429 || status >= 500) && attempt < maxRetries) {
         attempt++;
@@ -508,15 +518,15 @@ router.post('/chat', async (req, res) => {
     // Step 6: Limit conversation history to latest 6 messages
     const recentMessages = getRecentMessages(messages, 6);
 
-    // Step 7: Output limits
+    // Step 7: Output limits (500 tokens accounts for reasoning tokens + concise response without cutoff)
     const groqPayload = {
-      model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
       messages: [
         { role: 'system', content: fullSystemPrompt },
         ...recentMessages
       ],
       temperature: 0.3,
-      max_tokens: 300
+      max_tokens: parseInt(process.env.GROQ_MAX_TOKENS, 10) || 500
     };
 
     // Step 9: Call Groq with retry and error distinction
