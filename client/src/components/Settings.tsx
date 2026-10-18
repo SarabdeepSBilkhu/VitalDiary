@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   Settings as SettingsIcon, LogOut, Download, FileText, 
   Upload, Database, AlertOctagon, CalendarRange
@@ -113,6 +113,39 @@ export const Settings: React.FC<SettingsProps> = ({
     reports: true
   });
 
+  // Selected medical report IDs for PDF export
+  const [selectedReportIds, setSelectedReportIds] = useState<string[]>(() => reports.map(r => r.id));
+
+  // Sync selectedReportIds when reports change
+  useEffect(() => {
+    setSelectedReportIds(prev => {
+      const valid = prev.filter(id => reports.some(r => r.id === id));
+      if (valid.length === 0 && reports.length > 0) {
+        return reports.map(r => r.id);
+      }
+      return valid;
+    });
+  }, [reports]);
+
+  const handleSelectAllReports = () => {
+    setSelectedReportIds(reports.map(r => r.id));
+  };
+
+  const handleSelectLatestReportsOnly = () => {
+    const latest = getLatestReportsByType(reports);
+    setSelectedReportIds(latest.map(r => r.id));
+  };
+
+  const handleDeselectAllReports = () => {
+    setSelectedReportIds([]);
+  };
+
+  const handleToggleReportSelection = (id: string) => {
+    setSelectedReportIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
   const exportRange = useMemo<{ from: Date; to: Date }>(() => {
     const to = new Date();
     to.setHours(23, 59, 59, 999);
@@ -151,9 +184,13 @@ export const Settings: React.FC<SettingsProps> = ({
     const vitalsFiltered = filterByRange(vitals, exportRange.from, exportRange.to);
     const glucoseFiltered = filterByRange(glucose, exportRange.from, exportRange.to);
     const weightsFiltered = filterByRange(weights, exportRange.from, exportRange.to);
-    const latestReportsByType = getLatestReportsByType(reports);
+    const selectedReportsToExport = pdfIncludes.reports
+      ? reports
+          .filter(r => selectedReportIds.includes(r.id))
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      : [];
 
-    const hasContent = vitalsFiltered.length > 0 || glucoseFiltered.length > 0 || weightsFiltered.length > 0 || latestReportsByType.length > 0
+    const hasContent = vitalsFiltered.length > 0 || glucoseFiltered.length > 0 || weightsFiltered.length > 0 || selectedReportsToExport.length > 0
       || [profile.name, profile.age, profile.gender, profile.bloodGroup, profile.height, profile.allergies, profile.emergencyContact]
         .some(v => v?.trim());
 
@@ -646,14 +683,14 @@ export const Settings: React.FC<SettingsProps> = ({
     y += 8;
     }
 
-    // ─── Section 4: Latest medical reports by type ───────────────────────────
+    // ─── Section 4: Medical reports ──────────────────────────────────────────
 
     if (pdfIncludes.reports) {
       const drawLabReportsSectionHeader = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(50, 50, 50);
-      doc.text("4. LATEST MEDICAL LAB REPORTS (BY TYPE)", 14, y);
+      doc.text("4. MEDICAL LAB REPORTS", 14, y);
 
       y += 8;
     };
@@ -672,8 +709,12 @@ export const Settings: React.FC<SettingsProps> = ({
       doc.setFontSize(9);
       doc.setTextColor(95, 70, 45);
 
+      const titleText = r.title && r.title !== reportType
+        ? `${r.title} (${reportType})`
+        : reportType;
+
       doc.text(
-        `${reportType}  —  ${fmtDT(r.timestamp)}`,
+        `${titleText}  —  ${fmtDT(r.timestamp)}`,
         16,
         y + 5.5
       );
@@ -962,20 +1003,20 @@ export const Settings: React.FC<SettingsProps> = ({
 
     drawLabReportsSectionHeader();
 
-    if (latestReportsByType.length === 0) {
+    if (selectedReportsToExport.length === 0) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(60, 60, 60);
 
       doc.text(
-        "No medical reports saved.",
+        "No medical reports selected.",
         16,
         y
       );
 
       y += 10;
     } else {
-      latestReportsByType.forEach((r, index) => {
+      selectedReportsToExport.forEach((r, index) => {
         if (index > 0 && y + 30 > 280) {
           doc.addPage();
           y = 20;
@@ -1304,13 +1345,109 @@ export const Settings: React.FC<SettingsProps> = ({
                   Medical Reports
                 </label>
               </div>
+
+              {/* ── Medical Reports Multi-Selection ── */}
+              {pdfIncludes.reports && (
+                <div className="export-reports-selector">
+                  <div className="d-flex justify-between align-center mb-2 flex-wrap gap-2">
+                    <span className="text-xs font-semibold text-secondary">
+                      Select Medical Reports ({selectedReportIds.length} of {reports.length} selected)
+                    </span>
+                    {reports.length > 0 && (
+                      <div className="d-flex gap-2">
+                        <button
+                          type="button"
+                          className="export-action-btn"
+                          onClick={handleSelectAllReports}
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          className="export-action-btn"
+                          onClick={handleSelectLatestReportsOnly}
+                          title="Select only the latest report for each category"
+                        >
+                          Select Latest Only
+                        </button>
+                        <button
+                          type="button"
+                          className="export-action-btn"
+                          onClick={handleDeselectAllReports}
+                        >
+                          Deselect All
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {reports.length === 0 ? (
+                    <div className="text-xs text-muted py-2">
+                      No medical reports saved in your account.
+                    </div>
+                  ) : (
+                    <div className="export-reports-list">
+                      {reports
+                        .slice()
+                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                        .map(report => {
+                          const isSelected = selectedReportIds.includes(report.id);
+                          const reportType = getReportTypeFromRecord(report);
+                          const formattedDate = new Date(report.timestamp).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          });
+
+                          return (
+                            <div
+                              key={report.id}
+                              className={`export-report-item ${isSelected ? 'selected' : ''}`}
+                              onClick={() => handleToggleReportSelection(report.id)}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleToggleReportSelection(report.id)}
+                                onClick={e => e.stopPropagation()}
+                                style={{ cursor: 'pointer' }}
+                              />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="d-flex align-center gap-2">
+                                  <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                                    {reportType}
+                                  </span>
+                                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                                    {report.title || reportType}
+                                  </span>
+                                </div>
+                                {report.notes && (
+                                  <p className="text-xs text-muted truncate mt-1" style={{ margin: '2px 0 0 0' }}>
+                                    {report.notes}
+                                  </p>
+                                )}
+                              </div>
+                              <span className="text-xs text-secondary" style={{ flexShrink: 0 }}>
+                                {formattedDate}
+                              </span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {/* ────────────────────────────────────────────────────────────── */}
 
             <div className="d-flex flex-column gap-3">
               <button className="btn btn-outline justify-between" onClick={() => void handleExportPDF()}>
                 <span className="d-flex align-center gap-2"><FileText size={18} className="color-danger" /> Export Medical PDF Report</span>
-                <span className="text-xs text-muted">Period summary + latest labs by type</span>
+                <span className="text-xs text-muted">
+                  {pdfIncludes.reports
+                    ? `Period summary + ${selectedReportIds.length} selected report${selectedReportIds.length === 1 ? '' : 's'}`
+                    : 'Period summary'}
+                </span>
               </button>
 
               <div className="border-top my-2 pt-3">

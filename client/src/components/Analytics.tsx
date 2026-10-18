@@ -166,30 +166,33 @@ interface AnalyticsProps {
 
 export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, reports }) => {
   const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight' | 'reports'>('bp');
-  const [timeframe, setTimeframe] = useState<'7days' | '30days' | 'year' | 'all'>('30days');
+  const [timeframe, setTimeframe] = useState<'7readings' | '30readings' | 'all'>('30readings');
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('CBC');
   const [selectedParam, setSelectedParam] = useState<string>('');
   const [trendModalParam, setTrendModalParam] = useState<string>('');
 
-  // 1. Filter logs by metric and timeframe
+  // 1. Filter logs by metric and readings count
   const filteredLogs = useMemo(() => {
-    const now = new Date();
     let sourceLogs: any[];
     if (metric === 'glucose') sourceLogs = glucose;
     else if (metric === 'weight') sourceLogs = weights;
     else if (metric === 'reports') sourceLogs = reports;
     else sourceLogs = vitals;
 
-    const filtered = sourceLogs.filter(log => {
-      const logDate = new Date(log.timestamp);
-      const diffDays = Math.ceil(Math.abs(now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (timeframe === '7days') return diffDays <= 7;
-      if (timeframe === '30days') return diffDays <= 30;
-      if (timeframe === 'year') return diffDays <= 365;
-      return true;
-    });
+    // Sort descending by timestamp (most recent first)
+    const sortedDesc = [...sourceLogs].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
 
-    return [...filtered].reverse(); // chronological order
+    let sliced = sortedDesc;
+    if (timeframe === '7readings' || (timeframe as string) === '7days') {
+      sliced = sortedDesc.slice(0, 7);
+    } else if (timeframe === '30readings' || (timeframe as string) === '30days') {
+      sliced = sortedDesc.slice(0, 30);
+    }
+
+    // Return in chronological order (oldest to newest) for chart plotting
+    return [...sliced].reverse();
   }, [metric, timeframe, vitals, glucose, weights, reports]);
 
   // 2. Collect available parameters when in report mode
@@ -296,14 +299,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     let warningCount = 0;
     let criticalCount = 0;
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const getRecent = <T extends { timestamp: string }>(arr: T[]) => arr.filter(item => new Date(item.timestamp) >= sevenDaysAgo);
-
     if (metric === 'bp') {
       const bpLogs = filteredLogs as VitalsRecord[];
-      const recentBpLogs = getRecent(bpLogs);
-      results.avg = recentBpLogs.length > 0 ? `${Math.round(recentBpLogs.reduce((a, b) => a + b.systolic, 0) / recentBpLogs.length)}/${Math.round(recentBpLogs.reduce((a, b) => a + b.diastolic, 0) / recentBpLogs.length)} mmHg` : '--/-- mmHg';
+      results.avg = bpLogs.length > 0
+        ? `${Math.round(bpLogs.reduce((a, b) => a + b.systolic, 0) / bpLogs.length)}/${Math.round(bpLogs.reduce((a, b) => a + b.diastolic, 0) / bpLogs.length)} mmHg`
+        : '--/-- mmHg';
       if (bpLogs.length > 0) {
         const sortedSys = [...bpLogs].sort((a, b) => b.systolic - a.systolic);
         const sortedDia = [...bpLogs].sort((a, b) => a.diastolic - b.diastolic);
@@ -319,8 +319,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'hr') {
       const hrLogs = filteredLogs as VitalsRecord[];
-      const recentHrLogs = getRecent(hrLogs);
-      results.avg = recentHrLogs.length > 0 ? `${Math.round(recentHrLogs.reduce((a, b) => a + b.hr, 0) / recentHrLogs.length)} bpm` : '-- bpm';
+      results.avg = hrLogs.length > 0
+        ? `${Math.round(hrLogs.reduce((a, b) => a + b.hr, 0) / hrLogs.length)} bpm`
+        : '-- bpm';
       if (hrLogs.length > 0) {
         const sorted = [...hrLogs].sort((a, b) => b.hr - a.hr);
         results.highest = `${sorted[0].hr} bpm`;
@@ -335,9 +336,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'spo2') {
       const spo2Logs = (filteredLogs as VitalsRecord[]).filter(l => l.spo2 !== null);
-      const recentSpo2Logs = getRecent(spo2Logs);
       if (spo2Logs.length > 0) {
-        results.avg = recentSpo2Logs.length > 0 ? `${Math.round(recentSpo2Logs.reduce((a, b) => a + (b.spo2 || 0), 0) / recentSpo2Logs.length)}%` : '--%';
+        results.avg = `${Math.round(spo2Logs.reduce((a, b) => a + (b.spo2 || 0), 0) / spo2Logs.length)}%`;
         const sorted = [...spo2Logs].sort((a, b) => (b.spo2 || 0) - (a.spo2 || 0));
         results.highest = `${sorted[0].spo2}%`;
         results.lowest = `${sorted[sorted.length - 1].spo2}%`;
@@ -351,31 +351,28 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'glucose') {
       const glLogs = filteredLogs as GlucoseRecord[];
-      const recentGlLogs = getRecent(glLogs);
 
-      const now = new Date();
-      const past3MonthsGlucose = glucose.filter(log => {
-        const logDate = new Date(log.timestamp);
-        const diffDays = Math.ceil(Math.abs(now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
-        return diffDays <= 90;
-      });
-      if (past3MonthsGlucose.length > 0) {
-        const sum = past3MonthsGlucose.reduce((a, b) => a + b.value, 0);
-        const avg = sum / past3MonthsGlucose.length;
+      // Estimate HbA1c based on the most recent glucose readings (up to 90 readings)
+      const recentGlucose = [...glucose]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 90);
+      if (recentGlucose.length > 0) {
+        const sum = recentGlucose.reduce((a, b) => a + b.value, 0);
+        const avg = sum / recentGlucose.length;
         const hba1c = (avg + 46.7) / 28.7;
         results.estimatedHbA1c = `${hba1c.toFixed(1)}%`;
       }
 
-      results.avg = recentGlLogs.length > 0 ? `${Math.round(recentGlLogs.reduce((a, b) => a + b.value, 0) / recentGlLogs.length)} mg/dL` : '-- mg/dL';
+      results.avg = glLogs.length > 0 ? `${Math.round(glLogs.reduce((a, b) => a + b.value, 0) / glLogs.length)} mg/dL` : '-- mg/dL';
       if (glLogs.length > 0) {
         const sorted = [...glLogs].sort((a, b) => b.value - a.value);
         results.highest = `${sorted[0].value} mg/dL`;
         results.lowest = `${sorted[sorted.length - 1].value} mg/dL`;
       }
       const calcAvg = (arr: GlucoseRecord[]) => arr.length ? `${Math.round(arr.reduce((a, b) => a + b.value, 0) / arr.length)} mg/dL` : '--';
-      results.glucoseFastingAvg = calcAvg(recentGlLogs.filter(l => l.context === 'fasting'));
-      results.glucosePreAvg = calcAvg(recentGlLogs.filter(l => l.context === 'pre-meal'));
-      results.glucosePostAvg = calcAvg(recentGlLogs.filter(l => l.context === 'post-meal'));
+      results.glucoseFastingAvg = calcAvg(glLogs.filter(l => l.context === 'fasting'));
+      results.glucosePreAvg = calcAvg(glLogs.filter(l => l.context === 'pre-meal'));
+      results.glucosePostAvg = calcAvg(glLogs.filter(l => l.context === 'post-meal'));
       glLogs.forEach(log => {
         const e = evaluateGlucose(log.value, log.context);
         if (e.className === 'status-normal') normalCount++;
@@ -385,9 +382,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'weight') {
       const wtLogs = filteredLogs as WeightRecord[];
-      const recentWtLogs = getRecent(wtLogs);
-      const sum = recentWtLogs.reduce((a, b) => a + b.value, 0);
-      results.avg = recentWtLogs.length > 0 ? `${(sum / recentWtLogs.length).toFixed(1)} kg` : '-- kg';
+      const sum = wtLogs.reduce((a, b) => a + b.value, 0);
+      results.avg = wtLogs.length > 0 ? `${(sum / wtLogs.length).toFixed(1)} kg` : '-- kg';
       if (wtLogs.length > 0) {
         const sorted = [...wtLogs].sort((a, b) => b.value - a.value);
         results.highest = `${sorted[0].value} kg`;
@@ -397,28 +393,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'reports') {
       const repLogs = filteredLogs as ReportRecord[];
-      const recentRepLogs = getRecent(repLogs);
       if (resolvedParam) {
         const values: number[] = [];
-        const recentValues: number[] = [];
         repLogs.forEach(r => {
           const parsed = parseReportParameters(r.data);
           if (resolvedParam in parsed) values.push(parsed[resolvedParam]);
         });
-        recentRepLogs.forEach(r => {
-          const parsed = parseReportParameters(r.data);
-          if (resolvedParam in parsed) recentValues.push(parsed[resolvedParam]);
-        });
-        if (recentValues.length > 0) {
-          results.avg = `${(recentValues.reduce((a, b) => a + b, 0) / recentValues.length).toFixed(2)}`;
-        }
         if (values.length > 0) {
+          results.avg = `${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)}`;
           results.highest = `${Math.max(...values).toFixed(2)}`;
           results.lowest = `${Math.min(...values).toFixed(2)}`;
           normalCount = values.length;
         }
       } else {
-        results.avg = `${recentRepLogs.length} reports`;
+        results.avg = `${repLogs.length} reports`;
         normalCount = repLogs.length;
       }
     }
@@ -780,7 +768,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                 htmlFor="analytics-timeframe-select"
                 style={{ display: 'block', marginBottom: '8px', marginTop: '8px' }}
               >
-                Time Range
+                Range
               </label>
 
               <select
@@ -789,10 +777,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                 value={timeframe}
                 onChange={(e) => setTimeframe(e.target.value as any)}
               >
-                <option value="7days">Last 7 Days</option>
-                <option value="30days">Last 30 Days</option>
-                <option value="year">Last 1 Year</option>
-                <option value="all">All-Time</option>
+                <option value="7readings">Last 7 Readings</option>
+                <option value="30readings">Last 30 Readings</option>
+                <option value="all">All Readings</option>
               </select>
             </div>
           )}
@@ -817,7 +804,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                 <Line data={chartData} options={chartOptions} />
               ) : (
                 <div className="d-flex align-center justify-center h-100 text-muted">
-                  No logs recorded within this time range. Add health logs to view statistics.
+                  No logs recorded. Add health logs to view statistics.
                 </div>
               )}
             </div>
@@ -828,7 +815,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
               {(['fasting', 'preMeal', 'postMeal'] as const).map((ctx, i) => {
                 const labels = ['🟢 Fasting', '🟠 Pre-Meal', '🟣 Post-Meal'];
                 const colorClasses = ['color-success', 'color-warning', 'color-purple'];
-                const emptyMsg = ['No fasting glucose readings in this range.', 'No pre-meal glucose readings in this range.', 'No post-meal glucose readings in this range.'];
+                const emptyMsg = ['No fasting glucose readings recorded.', 'No pre-meal glucose readings recorded.', 'No post-meal glucose readings recorded.'];
                 return (
                   <div key={ctx} className="glucose-chart-section">
                     <h4 className={`glucose-chart-label ${colorClasses[i]}`}>{labels[i]}</h4>
@@ -1127,7 +1114,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                   {metric === 'glucose' && (
                     <>
                       <div className="summary-item">
-                        <div className="summary-label">Estimated HbA1c (90 Days)</div>
+                        <div className="summary-label">Estimated HbA1c (90 Readings)</div>
                         <div className="summary-value">{stats.estimatedHbA1c}</div>
                       </div>
                       <div className="summary-item">
