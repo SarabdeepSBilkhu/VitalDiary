@@ -337,16 +337,12 @@ export const Settings: React.FC<SettingsProps> = ({
       { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
     ];
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const recentVitals = vitalsFiltered.filter(v => new Date(v.timestamp) >= sevenDaysAgo);
-
-    const avgSysPeriod = recentVitals.length ? Math.round(recentVitals.reduce((a, b) => a + b.systolic, 0) / recentVitals.length) : 0;
-    const avgDiaPeriod = recentVitals.length ? Math.round(recentVitals.reduce((a, b) => a + b.diastolic, 0) / recentVitals.length) : 0;
-    const avgHrPeriod = recentVitals.length ? Math.round(recentVitals.reduce((a, b) => a + b.hr, 0) / recentVitals.length) : 0;
-    const spo2Readings = recentVitals.filter(v => v.spo2);
+    const avgSysPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.systolic), 0) / vitalsFiltered.length) : 0;
+    const avgDiaPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.diastolic), 0) / vitalsFiltered.length) : 0;
+    const avgHrPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.hr), 0) / vitalsFiltered.length) : 0;
+    const spo2Readings = vitalsFiltered.filter(v => v.spo2 !== null && v.spo2 !== undefined);
     const avgSpo2Period = spo2Readings.length
-      ? Math.round(spo2Readings.reduce((a, b) => a + (b.spo2 || 0), 0) / spo2Readings.length)
+      ? Math.round(spo2Readings.reduce((a, b) => a + Number(b.spo2 || 0), 0) / spo2Readings.length)
       : 0;
 
     drawSummaryBox(`VITALS SUMMARY — ${periodLabel} (${vitalsFiltered.length} readings)`, [
@@ -475,7 +471,7 @@ export const Settings: React.FC<SettingsProps> = ({
     ];
 
     const calcGlucoseAvg = (logs: GlucoseRecord[]) =>
-      logs.length ? Math.round(logs.reduce((a, b) => a + b.value, 0) / logs.length) : 0;
+      logs.length ? Math.round(logs.reduce((a, b) => a + Number(b.value), 0) / logs.length) : 0;
 
     const glFastingPeriod = glucoseFiltered.filter(g => g.context === 'fasting');
     const glPreMealPeriod = glucoseFiltered.filter(g => g.context === 'pre-meal');

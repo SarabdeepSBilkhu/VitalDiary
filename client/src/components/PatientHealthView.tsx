@@ -63,15 +63,15 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
       : (latestVital.temperature > 100.4 ? { status: "Fever", className: "status-high" } : { status: "Normal", className: "status-normal" })
     ) : null;
 
-  // 2. Averages (Last 7 Days Only)
-  const getRecent = <T extends { timestamp: string }>(arr: T[]) => {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    return arr.filter(item => new Date(item.timestamp) >= sevenDaysAgo);
-  };
+  // 2. Averages (Recent Readings - up to 7 readings)
+  const sortedVitals = [...vitals].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+  const sortedGlucose = [...glucose].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 
-  const recentVitals = getRecent(vitals);
-  const recentGlucose = getRecent(glucose);
+  const recentVitals = sortedVitals.slice(0, 7);
 
   const avgBP = () => {
     if (recentVitals.length === 0) return '--/-- mmHg';
@@ -87,7 +87,7 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
   };
 
   const avgSpO2 = () => {
-    const validSpo2 = recentVitals.filter(l => l.spo2 !== null);
+    const validSpo2 = recentVitals.filter(l => l.spo2 !== null && l.spo2 !== undefined);
     if (validSpo2.length === 0) return '-- %';
     const spo2Sum = validSpo2.reduce((acc, l) => acc + Number(l.spo2 || 0), 0);
     return `${Math.round(spo2Sum / validSpo2.length)} %`;
@@ -96,35 +96,34 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
   const avgTemp = () => {
     const validTemp = recentVitals.filter(l => l.temperature !== null && l.temperature !== undefined);
     if (validTemp.length === 0) return '--';
-    // Mixed units would complicate averages, simple approximation:
     const tempSum = validTemp.reduce((acc, l) => acc + Number(l.temperature), 0);
     const unit = validTemp[0]?.temperature_unit || 'C';
     return `${(tempSum / validTemp.length).toFixed(1)} °${unit}`;
   };
 
   const avgFastingGlucose = () => {
-    const fasting = recentGlucose.filter(l => l.context === 'fasting');
+    const fasting = sortedGlucose.filter(l => l.context === 'fasting').slice(0, 7);
     if (fasting.length === 0) return '-- mg/dL';
     const sum = fasting.reduce((acc, l) => acc + Number(l.value), 0);
     return `${Math.round(sum / fasting.length)} mg/dL`;
   };
 
   const avgPreMealGlucose = () => {
-    const preMeal = recentGlucose.filter(l => l.context === 'pre-meal');
+    const preMeal = sortedGlucose.filter(l => l.context === 'pre-meal').slice(0, 7);
     if (preMeal.length === 0) return '-- mg/dL';
     const sum = preMeal.reduce((acc, l) => acc + Number(l.value), 0);
     return `${Math.round(sum / preMeal.length)} mg/dL`;
   };
 
   const avgPostMealGlucose = () => {
-    const postMeal = recentGlucose.filter(l => l.context === 'post-meal');
+    const postMeal = sortedGlucose.filter(l => l.context === 'post-meal').slice(0, 7);
     if (postMeal.length === 0) return '-- mg/dL';
     const sum = postMeal.reduce((acc, l) => acc + Number(l.value), 0);
     return `${Math.round(sum / postMeal.length)} mg/dL`;
   };
 
   // 3. BP Chart (last 7, chronological)
-  const chartVitals = [...vitals].slice(0, 7).reverse();
+  const chartVitals = sortedVitals.slice(0, 7).reverse();
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const textColor = isDark ? '#b2ccd6' : '#546e7a';

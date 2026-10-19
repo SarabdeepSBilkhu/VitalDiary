@@ -302,15 +302,15 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     if (metric === 'bp') {
       const bpLogs = filteredLogs as VitalsRecord[];
       results.avg = bpLogs.length > 0
-        ? `${Math.round(bpLogs.reduce((a, b) => a + b.systolic, 0) / bpLogs.length)}/${Math.round(bpLogs.reduce((a, b) => a + b.diastolic, 0) / bpLogs.length)} mmHg`
+        ? `${Math.round(bpLogs.reduce((a, b) => a + Number(b.systolic), 0) / bpLogs.length)}/${Math.round(bpLogs.reduce((a, b) => a + Number(b.diastolic), 0) / bpLogs.length)} mmHg`
         : '--/-- mmHg';
       if (bpLogs.length > 0) {
-        const sortedSys = [...bpLogs].sort((a, b) => b.systolic - a.systolic);
-        const sortedDia = [...bpLogs].sort((a, b) => a.diastolic - b.diastolic);
+        const sortedSys = [...bpLogs].sort((a, b) => Number(b.systolic) - Number(a.systolic));
+        const sortedDia = [...bpLogs].sort((a, b) => Number(a.diastolic) - Number(b.diastolic));
         results.highest = `${sortedSys[0].systolic}/${sortedSys[0].diastolic}`;
         results.lowest = `${sortedDia[0].systolic}/${sortedDia[0].diastolic}`;
         bpLogs.forEach(log => {
-          const e = evaluateBP(log.systolic, log.diastolic);
+          const e = evaluateBP(Number(log.systolic), Number(log.diastolic));
           if (e.className === 'status-normal') normalCount++;
           else if (e.className === 'status-elevated') warningCount++;
           else criticalCount++;
@@ -320,14 +320,14 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     } else if (metric === 'hr') {
       const hrLogs = filteredLogs as VitalsRecord[];
       results.avg = hrLogs.length > 0
-        ? `${Math.round(hrLogs.reduce((a, b) => a + b.hr, 0) / hrLogs.length)} bpm`
+        ? `${Math.round(hrLogs.reduce((a, b) => a + Number(b.hr), 0) / hrLogs.length)} bpm`
         : '-- bpm';
       if (hrLogs.length > 0) {
-        const sorted = [...hrLogs].sort((a, b) => b.hr - a.hr);
+        const sorted = [...hrLogs].sort((a, b) => Number(b.hr) - Number(a.hr));
         results.highest = `${sorted[0].hr} bpm`;
         results.lowest = `${sorted[sorted.length - 1].hr} bpm`;
         hrLogs.forEach(log => {
-          const e = evaluateHR(log.hr);
+          const e = evaluateHR(Number(log.hr));
           if (e.className === 'status-normal') normalCount++;
           else if (e.className === 'status-elevated' || e.className === 'status-low') warningCount++;
           else criticalCount++;
@@ -335,14 +335,14 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
       }
 
     } else if (metric === 'spo2') {
-      const spo2Logs = (filteredLogs as VitalsRecord[]).filter(l => l.spo2 !== null);
+      const spo2Logs = (filteredLogs as VitalsRecord[]).filter(l => l.spo2 !== null && l.spo2 !== undefined);
       if (spo2Logs.length > 0) {
-        results.avg = `${Math.round(spo2Logs.reduce((a, b) => a + (b.spo2 || 0), 0) / spo2Logs.length)}%`;
-        const sorted = [...spo2Logs].sort((a, b) => (b.spo2 || 0) - (a.spo2 || 0));
+        results.avg = `${Math.round(spo2Logs.reduce((a, b) => a + Number(b.spo2 || 0), 0) / spo2Logs.length)}%`;
+        const sorted = [...spo2Logs].sort((a, b) => Number(b.spo2 || 0) - Number(a.spo2 || 0));
         results.highest = `${sorted[0].spo2}%`;
         results.lowest = `${sorted[sorted.length - 1].spo2}%`;
         spo2Logs.forEach(log => {
-          const e = evaluateSpO2(log.spo2);
+          const e = evaluateSpO2(Number(log.spo2));
           if (e.className === 'status-normal') normalCount++;
           else if (e.className === 'status-elevated') warningCount++;
           else criticalCount++;
@@ -357,24 +357,24 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, 90);
       if (recentGlucose.length > 0) {
-        const sum = recentGlucose.reduce((a, b) => a + b.value, 0);
+        const sum = recentGlucose.reduce((a, b) => a + Number(b.value), 0);
         const avg = sum / recentGlucose.length;
         const hba1c = (avg + 46.7) / 28.7;
         results.estimatedHbA1c = `${hba1c.toFixed(1)}%`;
       }
 
-      results.avg = glLogs.length > 0 ? `${Math.round(glLogs.reduce((a, b) => a + b.value, 0) / glLogs.length)} mg/dL` : '-- mg/dL';
+      results.avg = glLogs.length > 0 ? `${Math.round(glLogs.reduce((a, b) => a + Number(b.value), 0) / glLogs.length)} mg/dL` : '-- mg/dL';
       if (glLogs.length > 0) {
-        const sorted = [...glLogs].sort((a, b) => b.value - a.value);
+        const sorted = [...glLogs].sort((a, b) => Number(b.value) - Number(a.value));
         results.highest = `${sorted[0].value} mg/dL`;
         results.lowest = `${sorted[sorted.length - 1].value} mg/dL`;
       }
-      const calcAvg = (arr: GlucoseRecord[]) => arr.length ? `${Math.round(arr.reduce((a, b) => a + b.value, 0) / arr.length)} mg/dL` : '--';
+      const calcAvg = (arr: GlucoseRecord[]) => arr.length ? `${Math.round(arr.reduce((a, b) => a + Number(b.value), 0) / arr.length)} mg/dL` : '--';
       results.glucoseFastingAvg = calcAvg(glLogs.filter(l => l.context === 'fasting'));
       results.glucosePreAvg = calcAvg(glLogs.filter(l => l.context === 'pre-meal'));
       results.glucosePostAvg = calcAvg(glLogs.filter(l => l.context === 'post-meal'));
       glLogs.forEach(log => {
-        const e = evaluateGlucose(log.value, log.context);
+        const e = evaluateGlucose(Number(log.value), log.context);
         if (e.className === 'status-normal') normalCount++;
         else if (e.className === 'status-elevated') warningCount++;
         else criticalCount++;
@@ -382,10 +382,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'weight') {
       const wtLogs = filteredLogs as WeightRecord[];
-      const sum = wtLogs.reduce((a, b) => a + b.value, 0);
+      const sum = wtLogs.reduce((a, b) => a + Number(b.value), 0);
       results.avg = wtLogs.length > 0 ? `${(sum / wtLogs.length).toFixed(1)} kg` : '-- kg';
       if (wtLogs.length > 0) {
-        const sorted = [...wtLogs].sort((a, b) => b.value - a.value);
+        const sorted = [...wtLogs].sort((a, b) => Number(b.value) - Number(a.value));
         results.highest = `${sorted[0].value} kg`;
         results.lowest = `${sorted[sorted.length - 1].value} kg`;
         normalCount = wtLogs.length;
@@ -397,10 +397,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
         const values: number[] = [];
         repLogs.forEach(r => {
           const parsed = parseReportParameters(r.data);
-          if (resolvedParam in parsed) values.push(parsed[resolvedParam]);
+          if (resolvedParam in parsed) values.push(Number(parsed[resolvedParam]));
         });
         if (values.length > 0) {
-          results.avg = `${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)}`;
+          results.avg = `${(values.reduce((a, b) => a + Number(b), 0) / values.length).toFixed(2)}`;
           results.highest = `${Math.max(...values).toFixed(2)}`;
           results.lowest = `${Math.min(...values).toFixed(2)}`;
           normalCount = values.length;
