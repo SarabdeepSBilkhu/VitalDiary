@@ -39,7 +39,7 @@ describe('Vitals Routes', () => {
       const res = await request(app)
         .post('/api/vitals')
         .set('Authorization', `Bearer ${token}`)
-        .send({ systolic: 120 }); // Missing timestamp, diastolic, hr
+        .send({ systolic: 120 }); // Missing timestamp, diastolic
       
       expect(res.statusCode).toEqual(400);
     });

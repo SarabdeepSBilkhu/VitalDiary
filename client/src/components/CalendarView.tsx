@@ -188,7 +188,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           </span>
                         </div>
                         <div className="calendar-detail-values">
-                          BP: {vitalLog.systolic}/{vitalLog.diastolic} mmHg | HR: {vitalLog.hr} bpm
+                          BP: {vitalLog.systolic}/{vitalLog.diastolic} mmHg{vitalLog.hr ? ` | HR: ${vitalLog.hr} bpm` : ''}
                         </div>
                         <div className="text-sm text-secondary">
                           SpO₂: {vitalLog.spo2 || '--'}% | BP Status:{' '}

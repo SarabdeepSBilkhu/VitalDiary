@@ -5,7 +5,7 @@ const createVitalsSchema = z.object({
   timestamp: z.string().datetime({ offset: true, message: 'timestamp must be a valid ISO 8601 datetime.' }),
   systolic: z.number({ coerce: true }).int().min(40).max(300),
   diastolic: z.number({ coerce: true }).int().min(20).max(200),
-  hr: z.number({ coerce: true }).int().min(20).max(300),
+  hr: z.number({ coerce: true }).int().min(20).max(300).optional().nullable(),
   spo2: z.number({ coerce: true }).int().min(50).max(100).optional().nullable(),
   temperature: z.number({ coerce: true }).min(30).max(110).optional().nullable(),
   temperature_unit: z.enum(['C', 'F']).optional().nullable(),

@@ -81,9 +81,10 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
   };
 
   const avgHR = () => {
-    if (recentVitals.length === 0) return '-- bpm';
-    const hrSum = recentVitals.reduce((acc, l) => acc + Number(l.hr), 0);
-    return `${Math.round(hrSum / recentVitals.length)} bpm`;
+    const validHr = recentVitals.filter(l => l.hr !== null && l.hr !== undefined && !isNaN(Number(l.hr)));
+    if (validHr.length === 0) return '-- bpm';
+    const hrSum = validHr.reduce((acc, l) => acc + Number(l.hr), 0);
+    return `${Math.round(hrSum / validHr.length)} bpm`;
   };
 
   const avgSpO2 = () => {
@@ -242,7 +243,7 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
           </div>
           <div className="card-value-container">
             <div className="card-value" id="latest-hr">
-              {latestVital ? latestVital.hr : '--'}
+              {latestVital && latestVital.hr !== null && latestVital.hr !== undefined ? latestVital.hr : '--'}
             </div>
             <span className="card-unit">bpm</span>
           </div>

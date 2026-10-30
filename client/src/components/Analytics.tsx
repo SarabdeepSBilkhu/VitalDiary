@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calculator, LineChart as ChartIcon, FlaskConical, FileText, X, TrendingUp } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
-import type { WeightRecord, ReportRecord } from '../utils/api';
-import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel } from '../utils/evaluators';
+import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
+import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel, calculateNormalWeightRange } from '../utils/evaluators';
 import { Line } from 'react-chartjs-2';
 import {
   parseReportParameters,
@@ -170,6 +170,17 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('CBC');
   const [selectedParam, setSelectedParam] = useState<string>('');
   const [trendModalParam, setTrendModalParam] = useState<string>('');
+  const [userProfile, setUserProfile] = useState<ProfileRecord | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.getProfile().then(p => {
+      if (!cancelled) setUserProfile(p);
+    }).catch(() => {
+      // Ignore profile fetch failure
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // 1. Filter logs by metric and readings count
   const filteredLogs = useMemo(() => {
@@ -318,7 +329,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
       }
 
     } else if (metric === 'hr') {
-      const hrLogs = filteredLogs as VitalsRecord[];
+      const allHrLogs = filteredLogs as VitalsRecord[];
+      const hrLogs = allHrLogs.filter(l => l.hr !== null && l.hr !== undefined && !isNaN(Number(l.hr)));
       results.avg = hrLogs.length > 0
         ? `${Math.round(hrLogs.reduce((a, b) => a + Number(b.hr), 0) / hrLogs.length)} bpm`
         : '-- bpm';
@@ -388,7 +400,23 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
         const sorted = [...wtLogs].sort((a, b) => Number(b.value) - Number(a.value));
         results.highest = `${sorted[0].value} kg`;
         results.lowest = `${sorted[sorted.length - 1].value} kg`;
-        normalCount = wtLogs.length;
+
+        const weightRange = calculateNormalWeightRange(userProfile?.height);
+        if (weightRange) {
+          const [minW, maxW] = weightRange;
+          wtLogs.forEach(log => {
+            const v = Number(log.value);
+            if (v >= minW && v <= maxW) {
+              normalCount++;
+            } else if (v > maxW && v <= maxW * 1.2) {
+              warningCount++;
+            } else {
+              criticalCount++;
+            }
+          });
+        } else {
+          normalCount = wtLogs.length;
+        }
       }
 
     } else if (metric === 'reports') {
@@ -415,7 +443,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     results.warning = warningCount;
     results.critical = criticalCount;
     return results;
-  }, [filteredLogs, metric, resolvedParam, glucose]);
+  }, [filteredLogs, metric, resolvedParam, glucose, userProfile]);
 
   // 4. Prepare Chart Data & Options
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -469,12 +497,13 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
         datasets: [
           {
             label: 'Heart Rate (bpm)',
-            data: hrLogs.map(l => l.hr),
+            data: hrLogs.map(l => (l.hr !== null && l.hr !== undefined ? l.hr : null)),
             borderColor: 'hsl(330, 80%, 60%)',
             backgroundColor: 'transparent',
             borderWidth: 3,
             tension: 0.3,
             fill: false,
+            spanGaps: true,
             pointBackgroundColor: 'hsl(330, 80%, 60%)',
             order: 1
           },
@@ -517,6 +546,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     } else if (metric === 'weight') {
       const weightLogs = filteredLogs as WeightRecord[];
+      const normalWeight = calculateNormalWeightRange(userProfile?.height);
 
       return {
         labels,
@@ -531,7 +561,15 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
             fill: false,
             pointBackgroundColor: 'hsl(150, 80%, 40%)',
             order: 1
-          }
+          },
+          ...(normalWeight
+            ? makeNormalBand(
+                labels.length,
+                normalWeight[0],
+                normalWeight[1],
+                `Normal Range: ${normalWeight[0]}–${normalWeight[1]} kg`
+              )
+            : [])
         ]
       };
 
@@ -591,7 +629,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
         datasets: []
       };
     }
-  }, [filteredLogs, metric, resolvedParam]);
+  }, [filteredLogs, metric, resolvedParam, userProfile]);
 
   const glucoseCharts = useMemo(() => {
     if (metric !== 'glucose') return null;
@@ -680,6 +718,28 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     plugins: {
       legend: {
+        onClick: (_e: any, legendItem: any, legend: any) => {
+          // If clicked item is a normal range band, prevent toggling its visibility
+          const text = (legendItem.text || '').toLowerCase();
+          if (
+            text.includes('normal range') ||
+            text.startsWith('normal:') ||
+            text.includes('systolic:') ||
+            text.includes('diastolic:')
+          ) {
+            return;
+          }
+          // Default legend toggle behavior for actual data series
+          const index = legendItem.datasetIndex;
+          const ci = legend.chart;
+          if (ci.isDatasetVisible(index)) {
+            ci.hide(index);
+            legendItem.hidden = true;
+          } else {
+            ci.show(index);
+            legendItem.hidden = false;
+          }
+        },
         labels: {
           color: textColor,
           font: { family: 'Outfit' },

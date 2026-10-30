@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Settings as SettingsIcon, LogOut, Download, FileText, 
-  Upload, Database, AlertOctagon, CalendarRange
+  Upload, Database, AlertOctagon, CalendarRange, SlidersHorizontal, X, Check
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { Chart, registerables } from 'chart.js';
@@ -112,6 +113,7 @@ export const Settings: React.FC<SettingsProps> = ({
     weight: true,
     reports: true
   });
+  const [showSectionsModal, setShowSectionsModal] = useState(false);
 
   // Selected medical report IDs for PDF export
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>(() => reports.map(r => r.id));
@@ -339,7 +341,8 @@ export const Settings: React.FC<SettingsProps> = ({
 
     const avgSysPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.systolic), 0) / vitalsFiltered.length) : 0;
     const avgDiaPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.diastolic), 0) / vitalsFiltered.length) : 0;
-    const avgHrPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.hr), 0) / vitalsFiltered.length) : 0;
+    const hrReadings = vitalsFiltered.filter(v => v.hr !== null && v.hr !== undefined && !isNaN(Number(v.hr)));
+    const avgHrPeriod = hrReadings.length ? Math.round(hrReadings.reduce((a, b) => a + Number(b.hr), 0) / hrReadings.length) : 0;
     const spo2Readings = vitalsFiltered.filter(v => v.spo2 !== null && v.spo2 !== undefined);
     const avgSpo2Period = spo2Readings.length
       ? Math.round(spo2Readings.reduce((a, b) => a + Number(b.spo2 || 0), 0) / spo2Readings.length)
@@ -388,16 +391,17 @@ export const Settings: React.FC<SettingsProps> = ({
       }
 
       // Heart Rate chart
-      const hrPng = await renderChartToPng({
+      const hrData = vitalsChronological.map(v => (v.hr !== null && v.hr !== undefined ? v.hr : null));
+      const hrPng = hrData.some(v => v !== null) ? await renderChartToPng({
         type: 'line',
         data: {
           labels: vitalsLabels,
           datasets: [
-            { label: 'Heart Rate (bpm)', data: vitalsChronological.map(v => v.hr), borderColor: 'rgb(220, 140, 40)', backgroundColor: 'rgba(220, 140, 40, 0.07)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 },
+            { label: 'Heart Rate (bpm)', data: hrData, borderColor: 'rgb(220, 140, 40)', backgroundColor: 'rgba(220, 140, 40, 0.07)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2, spanGaps: true },
           ]
         },
         options: vChartOpts('bpm')
-      });
+      }) : null;
       if (hrPng) {
         ensurePageSpace(70);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
@@ -1317,123 +1321,248 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
             {/* ────────────────────────────────────────────────────────────── */}
 
-            {/* ── Export Parameter Selection ──────────────────────────────────────── */}
-            <div className="export-parameters mb-4">
-              <div className="d-flex align-center gap-2 mb-3" style={{ color: 'var(--color-primary)' }}>
-                <FileText size={17} />
-                <span className="text-sm font-semibold">Include Sections</span>
-              </div>
-              <div className="d-flex flex-wrap gap-3">
-                <label className="d-flex align-center gap-2 text-sm text-secondary" style={{ cursor: 'pointer' }}>
-                  <input type="checkbox" checked={pdfIncludes.vitals} onChange={(e) => setPdfIncludes({ ...pdfIncludes, vitals: e.target.checked })} />
-                  Vitals (BP, HR, SpO2)
-                </label>
-                <label className="d-flex align-center gap-2 text-sm text-secondary" style={{ cursor: 'pointer' }}>
-                  <input type="checkbox" checked={pdfIncludes.glucose} onChange={(e) => setPdfIncludes({ ...pdfIncludes, glucose: e.target.checked })} />
-                  Blood Glucose
-                </label>
-                <label className="d-flex align-center gap-2 text-sm text-secondary" style={{ cursor: 'pointer' }}>
-                  <input type="checkbox" checked={pdfIncludes.weight} onChange={(e) => setPdfIncludes({ ...pdfIncludes, weight: e.target.checked })} />
-                  Body Weight
-                </label>
-                <label className="d-flex align-center gap-2 text-sm text-secondary" style={{ cursor: 'pointer' }}>
-                  <input type="checkbox" checked={pdfIncludes.reports} onChange={(e) => setPdfIncludes({ ...pdfIncludes, reports: e.target.checked })} />
-                  Medical Reports
-                </label>
-              </div>
+            {/* ── Export Parameter Selection Button & Pop-up Modal ─────────────────── */}
+            <div className="mb-4">
+              <button
+                type="button"
+                className="btn btn-outline justify-between w-100"
+                onClick={() => setShowSectionsModal(true)}
+              >
+                <span className="d-flex align-center gap-2">
+                  <SlidersHorizontal size={17} className="color-primary" />
+                  <span>Choose Included Sections</span>
+                </span>
+                <span className="text-xs text-muted">
+                  {[
+                    pdfIncludes.vitals && 'Vitals',
+                    pdfIncludes.glucose && 'Glucose',
+                    pdfIncludes.weight && 'Weight',
+                    pdfIncludes.reports && `Reports (${selectedReportIds.length})`
+                  ].filter(Boolean).join(', ') || 'None selected'}
+                </span>
+              </button>
+            </div>
 
-              {/* ── Medical Reports Multi-Selection ── */}
-              {pdfIncludes.reports && (
-                <div className="export-reports-selector">
-                  <div className="d-flex justify-between align-center mb-2 flex-wrap gap-2">
-                    <span className="text-xs font-semibold text-secondary">
-                      Select Medical Reports ({selectedReportIds.length} of {reports.length} selected)
-                    </span>
-                    {reports.length > 0 && (
-                      <div className="d-flex gap-2">
-                        <button
-                          type="button"
-                          className="export-action-btn"
-                          onClick={handleSelectAllReports}
-                        >
-                          Select All
-                        </button>
-                        <button
-                          type="button"
-                          className="export-action-btn"
-                          onClick={handleSelectLatestReportsOnly}
-                          title="Select only the latest report for each category"
-                        >
-                          Select Latest Only
-                        </button>
-                        <button
-                          type="button"
-                          className="export-action-btn"
-                          onClick={handleDeselectAllReports}
-                        >
-                          Deselect All
-                        </button>
+            {/* ── Pop-up window for selecting sections (portal to body to escape stacking context) ── */}
+            {showSectionsModal && createPortal(
+              <div
+                className="modal-overlay active"
+                onClick={() => setShowSectionsModal(false)}
+                style={{ zIndex: 1200 }}
+              >
+                <div
+                  className="modal-card"
+                  onClick={e => e.stopPropagation()}
+                  style={{ maxWidth: '540px', width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+                >
+                  <div className="modal-header">
+                    <div className="d-flex align-center gap-2">
+                      <FileText size={20} className="color-primary" />
+                      <h3 style={{ margin: 0, fontSize: '1.15rem' }}>Include Sections in PDF</h3>
+                    </div>
+                    <button
+                      className="modal-close"
+                      type="button"
+                      onClick={() => setShowSectionsModal(false)}
+                      aria-label="Close"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  <div className="modal-body" style={{ overflowY: 'auto' }}>
+                    <p style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      Select which categories of health data should be included in the exported PDF report.
+                    </p>
+
+                    <div className="d-flex flex-column gap-2">
+                      <label
+                        className={`section-choice-card${pdfIncludes.vitals ? ' selected' : ''}`}
+                        onClick={() => setPdfIncludes({ ...pdfIncludes, vitals: !pdfIncludes.vitals })}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pdfIncludes.vitals}
+                          onChange={e => setPdfIncludes({ ...pdfIncludes, vitals: e.target.checked })}
+                        />
+                        <div>
+                          <div className="section-choice-title">Vitals</div>
+                          <div className="section-choice-desc">Blood pressure, heart rate, and oxygen saturation</div>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`section-choice-card${pdfIncludes.glucose ? ' selected' : ''}`}
+                        onClick={() => setPdfIncludes({ ...pdfIncludes, glucose: !pdfIncludes.glucose })}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pdfIncludes.glucose}
+                          onChange={e => setPdfIncludes({ ...pdfIncludes, glucose: e.target.checked })}
+                        />
+                        <div>
+                          <div className="section-choice-title">Blood Glucose</div>
+                          <div className="section-choice-desc">Fasting, pre-meal, and post-meal records</div>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`section-choice-card${pdfIncludes.weight ? ' selected' : ''}`}
+                        onClick={() => setPdfIncludes({ ...pdfIncludes, weight: !pdfIncludes.weight })}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pdfIncludes.weight}
+                          onChange={e => setPdfIncludes({ ...pdfIncludes, weight: e.target.checked })}
+                        />
+                        <div>
+                          <div className="section-choice-title">Body Weight</div>
+                          <div className="section-choice-desc">Weight trend and measurements</div>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`section-choice-card${pdfIncludes.reports ? ' selected' : ''}`}
+                        onClick={() => setPdfIncludes({ ...pdfIncludes, reports: !pdfIncludes.reports })}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={pdfIncludes.reports}
+                          onChange={e => setPdfIncludes({ ...pdfIncludes, reports: e.target.checked })}
+                        />
+                        <div>
+                          <div className="section-choice-title">Medical Reports</div>
+                          <div className="section-choice-desc">Laboratory profiles (CBC, LFT, RFT, Lipid, HbA1c, etc.)</div>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* ── Nested Medical Reports Multi-Selection ── */}
+                    {pdfIncludes.reports && (
+                      <div className="export-reports-selector mt-3">
+                        <div className="d-flex justify-between align-center mb-2 flex-wrap gap-2">
+                          <span className="text-xs font-semibold text-secondary">
+                            Specific Reports ({selectedReportIds.length} of {reports.length} selected)
+                          </span>
+                          {reports.length > 0 && (
+                            <div className="d-flex gap-2">
+                              <button
+                                type="button"
+                                className="export-action-btn"
+                                onClick={handleSelectAllReports}
+                              >
+                                Select All
+                              </button>
+                              <button
+                                type="button"
+                                className="export-action-btn"
+                                onClick={handleSelectLatestReportsOnly}
+                                title="Select only the latest report for each category"
+                              >
+                                Select Latest Only
+                              </button>
+                              <button
+                                type="button"
+                                className="export-action-btn"
+                                onClick={handleDeselectAllReports}
+                              >
+                                Deselect All
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {reports.length === 0 ? (
+                          <div className="text-xs text-muted py-2">
+                            No medical reports saved in your account.
+                          </div>
+                        ) : (() => {
+                          /* Group reports by calendar date (newest date first) */
+                          const sorted = reports
+                            .slice()
+                            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+                          const groups: { dateLabel: string; items: typeof sorted }[] = [];
+                          sorted.forEach(report => {
+                            const dateLabel = new Date(report.timestamp).toLocaleDateString(undefined, {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            });
+                            const last = groups[groups.length - 1];
+                            if (last && last.dateLabel === dateLabel) {
+                              last.items.push(report);
+                            } else {
+                              groups.push({ dateLabel, items: [report] });
+                            }
+                          });
+
+                          return (
+                            <div className="export-reports-list" style={{ maxHeight: '240px' }}>
+                              {groups.map(group => (
+                                <div key={group.dateLabel}>
+                                  {/* Date group header */}
+                                  <div className="report-date-group-header">
+                                    {group.dateLabel}
+                                    <span className="report-date-group-count">{group.items.length} report{group.items.length !== 1 ? 's' : ''}</span>
+                                  </div>
+                                  {group.items.map(report => {
+                                    const isSelected = selectedReportIds.includes(report.id);
+                                    const reportType = getReportTypeFromRecord(report);
+                                    return (
+                                      <div
+                                        key={report.id}
+                                        className={`export-report-item ${isSelected ? 'selected' : ''}`}
+                                        onClick={() => handleToggleReportSelection(report.id)}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={() => handleToggleReportSelection(report.id)}
+                                          onClick={e => e.stopPropagation()}
+                                          style={{ cursor: 'pointer' }}
+                                        />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div className="d-flex align-center gap-2">
+                                            <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                                              {reportType}
+                                            </span>
+                                            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                                              {report.title || reportType}
+                                            </span>
+                                          </div>
+                                          {report.notes && (
+                                            <p className="text-xs text-muted" style={{ margin: '2px 0 0 0' }}>
+                                              {report.notes}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>
 
-                  {reports.length === 0 ? (
-                    <div className="text-xs text-muted py-2">
-                      No medical reports saved in your account.
-                    </div>
-                  ) : (
-                    <div className="export-reports-list">
-                      {reports
-                        .slice()
-                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                        .map(report => {
-                          const isSelected = selectedReportIds.includes(report.id);
-                          const reportType = getReportTypeFromRecord(report);
-                          const formattedDate = new Date(report.timestamp).toLocaleDateString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          });
-
-                          return (
-                            <div
-                              key={report.id}
-                              className={`export-report-item ${isSelected ? 'selected' : ''}`}
-                              onClick={() => handleToggleReportSelection(report.id)}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => handleToggleReportSelection(report.id)}
-                                onClick={e => e.stopPropagation()}
-                                style={{ cursor: 'pointer' }}
-                              />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div className="d-flex align-center gap-2">
-                                  <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
-                                    {reportType}
-                                  </span>
-                                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                                    {report.title || reportType}
-                                  </span>
-                                </div>
-                                {report.notes && (
-                                  <p className="text-xs text-muted truncate mt-1" style={{ margin: '2px 0 0 0' }}>
-                                    {report.notes}
-                                  </p>
-                                )}
-                              </div>
-                              <span className="text-xs text-secondary" style={{ flexShrink: 0 }}>
-                                {formattedDate}
-                              </span>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  )}
+                  <div className="modal-footer">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm d-flex align-center gap-1"
+                      onClick={() => setShowSectionsModal(false)}
+                    >
+                      <Check size={15} /> Done
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>,
+              document.body
+            )}
             {/* ────────────────────────────────────────────────────────────── */}
 
             <div className="d-flex flex-column gap-3">

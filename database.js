@@ -150,7 +150,7 @@ async function initDatabase(retries = 15, delay = 4000) {
           timestamp DATETIME NOT NULL,
           systolic INTEGER NOT NULL,
           diastolic INTEGER NOT NULL,
-          hr INTEGER NOT NULL,
+          hr INTEGER,
           spo2 INTEGER,
           temperature REAL,
           temperature_unit TEXT,
@@ -158,6 +158,15 @@ async function initDatabase(retries = 15, delay = 4000) {
           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
       `);
+
+      // Migration: allow NULL hr on existing databases if needed
+      if (isPg) {
+        try {
+          await dbQuery.run(`ALTER TABLE vitals ALTER COLUMN hr DROP NOT NULL`);
+        } catch (err) {
+          // Ignored if already nullable
+        }
+      }
 
       // Migration: add temperature columns to existing vitals table
       try {

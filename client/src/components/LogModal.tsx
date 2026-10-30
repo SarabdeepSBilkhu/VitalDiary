@@ -184,7 +184,7 @@ export const LogModal: React.FC<LogModalProps> = ({
           setVitalDate(formatted);
           setSystolic(String(logToEdit.systolic));
           setDiastolic(String(logToEdit.diastolic));
-          setHr(String(logToEdit.hr));
+          setHr(logToEdit.hr !== undefined && logToEdit.hr !== null ? String(logToEdit.hr) : '');
           setSpo2(logToEdit.spo2 ? String(logToEdit.spo2) : '');
           setTemperature(logToEdit.temperature ? String(logToEdit.temperature) : '');
           setTemperatureUnit(logToEdit.temperature_unit || 'C');
@@ -248,14 +248,14 @@ export const LogModal: React.FC<LogModalProps> = ({
 
   const handleVitalsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vitalDate || !systolic || !diastolic || !hr) {
-      showToast('Please fill out all required fields.', 'warning');
+    if (!vitalDate || !systolic || !diastolic) {
+      showToast('Please fill out all required fields (Date & Time, Systolic, Diastolic).', 'warning');
       return;
     }
 
     const sysNum = parseInt(systolic);
     const diaNum = parseInt(diastolic);
-    const hrNum = parseInt(hr);
+    const hrNum = hr ? parseInt(hr) : null;
     const spo2Num = spo2 ? parseInt(spo2) : null;
     const tempNum = temperature ? parseFloat(temperature) : null;
 
@@ -263,7 +263,7 @@ export const LogModal: React.FC<LogModalProps> = ({
       showToast('Please enter blood pressure within physiological limits (Systolic: 50-250, Diastolic: 30-180).', 'warning');
       return;
     }
-    if (hrNum < 30 || hrNum > 220) {
+    if (hrNum !== null && (hrNum < 30 || hrNum > 220)) {
       showToast('Please enter a valid heart rate (30-220 bpm).', 'warning');
       return;
     }
@@ -504,7 +504,7 @@ export const LogModal: React.FC<LogModalProps> = ({
               </div>
               
               <div className="form-group">
-                <label htmlFor="modal-vital-hr">Heart Rate *</label>
+                <label htmlFor="modal-vital-hr">Heart Rate</label>
                 <div className="input-unit-wrapper">
                   <input 
                     type="number" 
@@ -515,7 +515,6 @@ export const LogModal: React.FC<LogModalProps> = ({
                     className="form-control"
                     value={hr}
                     onChange={(e) => setHr(e.target.value)}
-                    required 
                   />
                   <span className="input-unit">bpm</span>
                 </div>

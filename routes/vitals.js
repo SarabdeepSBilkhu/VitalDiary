@@ -44,7 +44,7 @@ router.post('/', validate(createVitalsSchema), async (req, res) => {
     await dbQuery.run(
       `INSERT INTO vitals (id, user_id, timestamp, systolic, diastolic, hr, spo2, temperature, temperature_unit, notes) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [recordId, req.user.id, timestamp, systolic, diastolic, hr, spo2 || null, temperature || null, temperature_unit || null, notes || '']
+      [recordId, req.user.id, timestamp, systolic, diastolic, hr !== undefined && hr !== null && hr !== '' ? hr : null, spo2 || null, temperature || null, temperature_unit || null, notes || '']
     );
 
     const newLog = await dbQuery.get('SELECT * FROM vitals WHERE id = ?', [recordId]);
@@ -77,7 +77,7 @@ router.put('/:id', validate(updateVitalsSchema), async (req, res) => {
       `UPDATE vitals 
        SET timestamp = ?, systolic = ?, diastolic = ?, hr = ?, spo2 = ?, temperature = ?, temperature_unit = ?, notes = ? 
        WHERE id = ? AND user_id = ?`,
-      [timestamp, systolic, diastolic, hr, spo2 || null, temperature || null, temperature_unit || null, notes || '', id, req.user.id]
+      [timestamp, systolic, diastolic, hr !== undefined && hr !== null && hr !== '' ? hr : null, spo2 || null, temperature || null, temperature_unit || null, notes || '', id, req.user.id]
     );
 
     const updatedLog = await dbQuery.get('SELECT * FROM vitals WHERE id = ?', [id]);
@@ -140,7 +140,7 @@ router.post('/restore', async (req, res) => {
           log.timestamp,
           log.systolic,
           log.diastolic,
-          log.hr,
+          log.hr !== undefined && log.hr !== null && log.hr !== '' ? log.hr : null,
           log.spo2 !== undefined ? log.spo2 : null,
           log.temperature !== undefined ? log.temperature : null,
           log.temperature_unit || null,
@@ -240,12 +240,13 @@ router.post('/import', upload.single('file'), async (req, res) => {
       const timestamp = row.timestamp || row.date || row.datetime || row.time;
       const systolic = parseInt(row.systolic || row.sys || row.sbp, 10);
       const diastolic = parseInt(row.diastolic || row.dia || row.dbp, 10);
-      const hr = parseInt(row.hr || row.heart_rate || row.pulse, 10);
+      const rawHr = row.hr || row.heart_rate || row.pulse;
+      const hr = rawHr ? parseInt(rawHr, 10) : null;
       const spo2 = row.spo2 || row.oxygen || row.sp_o2 ? parseInt(row.spo2 || row.oxygen || row.sp_o2, 10) : null;
       const notes = row.notes || row.note || row.comment || '';
 
-      if (!timestamp || isNaN(systolic) || isNaN(diastolic) || isNaN(hr)) {
-        errors.push({ row: rowNum, error: 'Missing or invalid required columns (timestamp, systolic, diastolic, hr).' });
+      if (!timestamp || isNaN(systolic) || isNaN(diastolic)) {
+        errors.push({ row: rowNum, error: 'Missing or invalid required columns (timestamp, systolic, diastolic).' });
         continue;
       }
 
@@ -255,7 +256,7 @@ router.post('/import', upload.single('file'), async (req, res) => {
         await dbQuery.run(
           `INSERT INTO vitals (id, user_id, timestamp, systolic, diastolic, hr, spo2, notes) 
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [recordId, req.user.id, new Date(timestamp).toISOString(), systolic, diastolic, hr, spo2, notes]
+          [recordId, req.user.id, new Date(timestamp).toISOString(), systolic, diastolic, hr && !isNaN(hr) ? hr : null, spo2, notes]
         );
         const newLog = await dbQuery.get('SELECT * FROM vitals WHERE id = ?', [recordId]);
         upsertLogEmbedding(recordId, req.user.id, 'vitals', newLog);
