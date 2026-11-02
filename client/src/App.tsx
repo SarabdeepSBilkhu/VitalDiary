@@ -113,15 +113,24 @@ export const App: React.FC = () => {
     setRefreshTrigger(p => p + 1);
   }, []);
 
-  // Fetch data on login or refresh trigger
+  // Fetch data on login or refresh trigger, and sync fresh user profile/tier from server
   useEffect(() => {
     if (user) {
+      // Sync fresh session details (tier, subscription_status) from DB
+      api.getMe().then((freshUser) => {
+        if (freshUser && (freshUser.tier !== user.tier || freshUser.subscription_status !== user.subscription_status)) {
+          const merged = { ...user, ...freshUser };
+          setUser(merged);
+          localStorage.setItem('vital_diary_user', JSON.stringify(merged));
+        }
+      }).catch((err) => console.warn('Failed to sync session info:', err));
+
       const timer = setTimeout(() => {
         fetchData();
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [user, refreshTrigger, fetchData]);
+  }, [user?.id, refreshTrigger, fetchData]);
 
   // Sync auth expiration listener
   useEffect(() => {
