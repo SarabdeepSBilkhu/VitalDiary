@@ -3,7 +3,10 @@ const router = express.Router();
 const { dbQuery } = require('../database');
 const authenticateToken = require('../middleware/auth');
 
+const { requirePremium } = require('../middleware/subscription');
+
 router.use(authenticateToken);
+router.use(requirePremium);
 
 const normalizeTimeOfDay = (value) => {
   if (Array.isArray(value)) {

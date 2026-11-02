@@ -25,6 +25,7 @@
     "multer": "^2.2.0",
     "node-cron": "^4.6.0",
     "pg": "^8.21.0",
+    "razorpay": "^2.9.8",
     "sqlite-vec": "^0.1.9",
     "sqlite3": "^5.1.7",
     "xlsx-js-style": "^1.2.0",

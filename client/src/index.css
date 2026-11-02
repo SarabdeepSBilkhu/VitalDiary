@@ -2432,3 +2432,176 @@ select.form-control {
     max-width: 90%;
   }
 }
+
+/* ============================================================
+   19. SUBSCRIPTION & UPGRADE MODAL
+   ============================================================ */
+
+.upgrade-modal-card {
+  background: var(--bg-surface) !important;
+  border: 1px solid rgba(72, 199, 116, 0.4) !important;
+  border-radius: var(--border-radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(72, 199, 116, 0.15) !important;
+  color: var(--text-primary);
+}
+
+.premium-star-icon {
+  background: rgba(72, 199, 116, 0.12);
+  border: 1px solid rgba(72, 199, 116, 0.3);
+  padding: 8px;
+  border-radius: var(--border-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upgrade-trigger-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  background-color: rgba(72, 199, 116, 0.1);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-primary);
+}
+
+.plan-selector-card {
+  flex: 1;
+  padding: 1rem 1.15rem;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface-elevated);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.plan-selector-card:hover {
+  border-color: var(--color-primary);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.plan-selector-card.selected {
+  border-color: var(--color-primary);
+  background-color: rgba(72, 199, 116, 0.12);
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.plan-price-tag {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.plan-price-tag small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.upgrade-comparison-table {
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.comparison-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 100px;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.comparison-row:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+
+.comparison-row:last-child {
+  border-bottom: none;
+}
+
+.comparison-row.header-row {
+  background-color: var(--bg-surface);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.comparison-cell-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.pro-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(72, 199, 116, 0.18);
+  color: var(--color-primary);
+  border: 1px solid rgba(72, 199, 116, 0.4);
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.locked-feature-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background-color: var(--bg-surface-elevated);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius-lg);
+  margin: 1rem 0;
+}
+
+
+/* Membership Status Card in Settings */
+.membership-card {
+  padding: 1.15rem;
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.membership-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+}
+
+.membership-badge.free {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.membership-badge.premium {
+  background-color: rgba(72, 199, 116, 0.15);
+  color: var(--color-primary);
+  border: 1px solid rgba(72, 199, 116, 0.35);
+}

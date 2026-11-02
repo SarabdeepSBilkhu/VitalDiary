@@ -66,6 +66,7 @@ app.use('/api/weight', require('./routes/weight'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/ai', aiLimiter, require('./routes/ai'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/subscription', require('./routes/subscription'));
 
 // Serve Frontend Static Build Assets in Production
 const clientBuildPath = path.join(__dirname, 'client', 'dist');

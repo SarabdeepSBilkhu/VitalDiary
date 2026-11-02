@@ -162,9 +162,11 @@ interface AnalyticsProps {
   glucose: GlucoseRecord[];
   weights: WeightRecord[];
   reports: ReportRecord[];
+  isPremium?: boolean;
+  onOpenUpgrade?: (feature: string) => void;
 }
 
-export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, reports }) => {
+export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, reports, isPremium = false, onOpenUpgrade }) => {
   const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight' | 'reports'>('bp');
   const [timeframe, setTimeframe] = useState<'7readings' | '30readings' | 'all'>('30readings');
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('CBC');
@@ -811,14 +813,23 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
               id="analytics-metric-select"
               className="form-control"
               value={metric}
-              onChange={(e) => { setMetric(e.target.value as any); setSelectedParam(''); }}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!isPremium && (val === 'hr' || val === 'spo2' || val === 'reports')) {
+                  const featureName = val === 'hr' ? 'Heart Rate Analytics' : val === 'spo2' ? 'Blood Oxygen Analytics' : 'Medical Reports Analytics';
+                  onOpenUpgrade?.(featureName);
+                  return;
+                }
+                setMetric(val as any);
+                setSelectedParam('');
+              }}
             >
               <option value="bp">Blood Pressure</option>
-              <option value="hr">Heart Rate</option>
-              <option value="spo2">Blood Oxygen (SpO₂)</option>
+              <option value="hr">Heart Rate {!isPremium ? '(PRO)' : ''}</option>
+              <option value="spo2">Blood Oxygen (SpO₂) {!isPremium ? '(PRO)' : ''}</option>
               <option value="glucose">Blood Glucose</option>
               <option value="weight">Body Weight</option>
-              <option value="reports">Medical Reports</option>
+              <option value="reports">Medical Reports {!isPremium ? '(PRO)' : ''}</option>
             </select>
           </div>
 

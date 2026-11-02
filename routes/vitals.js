@@ -4,6 +4,7 @@ const multer = require('multer');
 const { parse } = require('csv-parse/sync');
 const { dbQuery } = require('../database');
 const authenticateToken = require('../middleware/auth');
+const { requirePremium } = require('../middleware/subscription');
 const validate = require('../middleware/validate');
 const { createVitalsSchema, updateVitalsSchema } = require('../schemas/vitals.schema');
 const { upsertLogEmbedding, deleteLogEmbedding } = require('../services/vectorStore');
@@ -118,7 +119,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // 5. Restore Vitals Backup (Bulk Insert)
-router.post('/restore', async (req, res) => {
+router.post('/restore', requirePremium, async (req, res) => {
   const { logs } = req.body;
 
   if (!Array.isArray(logs)) {
@@ -212,7 +213,7 @@ router.get('/trends', async (req, res) => {
 });
 
 // 7. CSV Wearable Import
-router.post('/import', upload.single('file'), async (req, res) => {
+router.post('/import', requirePremium, upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No CSV file uploaded. Send a multipart/form-data request with field name "file".' });
   }

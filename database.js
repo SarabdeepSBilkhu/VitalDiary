@@ -131,6 +131,11 @@ async function initDatabase(retries = 15, delay = 4000) {
           email TEXT UNIQUE NOT NULL,
           password TEXT NOT NULL,
           role TEXT NOT NULL DEFAULT 'patient',
+          tier TEXT NOT NULL DEFAULT 'free',
+          subscription_status TEXT NOT NULL DEFAULT 'inactive',
+          subscription_plan TEXT DEFAULT NULL,
+          subscription_id TEXT DEFAULT NULL,
+          subscription_current_period_end DATETIME DEFAULT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
@@ -140,6 +145,23 @@ async function initDatabase(retries = 15, delay = 4000) {
         await dbQuery.run(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'patient'`);
       } catch (err) {
         // Column already exists — expected on subsequent boots
+      }
+
+      // Add subscription / tier columns to existing databases (migrations)
+      const tierMigrations = [
+        `ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT 'free'`,
+        `ALTER TABLE users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'inactive'`,
+        `ALTER TABLE users ADD COLUMN subscription_plan TEXT DEFAULT NULL`,
+        `ALTER TABLE users ADD COLUMN subscription_id TEXT DEFAULT NULL`,
+        `ALTER TABLE users ADD COLUMN subscription_current_period_end DATETIME DEFAULT NULL`
+      ];
+
+      for (const sql of tierMigrations) {
+        try {
+          await dbQuery.run(sql);
+        } catch (err) {
+          // Column already exists — expected on subsequent boots
+        }
       }
 
       // 2. Vitals Table (Blood pressure, heart rate, spo2)

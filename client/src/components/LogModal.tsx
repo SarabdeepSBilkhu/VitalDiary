@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Activity, Thermometer, Weight, FileText, Plus, Trash2 } from 'lucide-react';
+import { X, Activity, Thermometer, Weight, FileText, Plus, Trash2, Lock } from 'lucide-react';
 
 const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Urine Report', 'Other Reports'];
 
@@ -122,6 +122,8 @@ interface LogModalProps {
   onSaveReport: (data: any) => Promise<void>;
   showToast: (msg: string, type?: 'success' | 'danger' | 'warning' | 'info') => void;
   selectedCalendarDate: Date | null;
+  isPremium?: boolean;
+  onOpenUpgrade?: (feature: string) => void;
 }
 
 const getLocalISOString = (date: Date) => {
@@ -138,7 +140,9 @@ export const LogModal: React.FC<LogModalProps> = ({
   onSaveWeight,
   onSaveReport,
   showToast,
-  selectedCalendarDate
+  selectedCalendarDate,
+  isPremium = false,
+  onOpenUpgrade
 }) => {
   const [activeTab, setActiveTab] = useState<'vitals' | 'glucose' | 'weight' | 'reports'>('vitals');
   
@@ -445,9 +449,16 @@ export const LogModal: React.FC<LogModalProps> = ({
             <button 
               type="button"
               className={`modal-tab ${activeTab === 'reports' ? 'active' : ''}`}
-              onClick={() => setActiveTab('reports')}
+              onClick={() => {
+                if (!isPremium) {
+                  onOpenUpgrade?.('Medical Reports');
+                  return;
+                }
+                setActiveTab('reports');
+              }}
             >
               <FileText size={16} /> Medical Report
+              {!isPremium && <span className="pro-nav-badge">PRO</span>}
             </button>
           </div>
         )}
@@ -504,34 +515,62 @@ export const LogModal: React.FC<LogModalProps> = ({
               </div>
               
               <div className="form-group">
-                <label htmlFor="modal-vital-hr">Heart Rate</label>
+                <div className="d-flex justify-between align-center">
+                  <label htmlFor="modal-vital-hr">Heart Rate</label>
+                  {!isPremium && (
+                    <button
+                      type="button"
+                      className="btn btn-text p-0 d-flex align-center gap-1 text-xs color-primary"
+                      onClick={() => onOpenUpgrade?.('Heart Rate')}
+                      style={{ fontSize: '0.72rem', cursor: 'pointer' }}
+                    >
+                      <Lock size={11} /> PRO
+                    </button>
+                  )}
+                </div>
                 <div className="input-unit-wrapper">
                   <input 
                     type="number" 
                     id="modal-vital-hr" 
                     min="30" 
                     max="220" 
-                    placeholder="e.g. 72" 
+                    placeholder={isPremium ? "e.g. 72" : "Locked on Free plan"} 
                     className="form-control"
-                    value={hr}
-                    onChange={(e) => setHr(e.target.value)}
+                    value={isPremium ? hr : ''}
+                    onChange={(e) => isPremium && setHr(e.target.value)}
+                    disabled={!isPremium}
+                    style={!isPremium ? { backgroundColor: 'rgba(255, 255, 255, 0.02)', cursor: 'not-allowed' } : {}}
                   />
                   <span className="input-unit">bpm</span>
                 </div>
               </div>
               
               <div className="form-group">
-                <label htmlFor="modal-vital-spo2">Oxygen Saturation (SpO₂)</label>
+                <div className="d-flex justify-between align-center">
+                  <label htmlFor="modal-vital-spo2">Oxygen Saturation (SpO₂)</label>
+                  {!isPremium && (
+                    <button
+                      type="button"
+                      className="btn btn-text p-0 d-flex align-center gap-1 text-xs color-primary"
+                      onClick={() => onOpenUpgrade?.('Oxygen Saturation (SpO₂)')}
+                      style={{ fontSize: '0.72rem', cursor: 'pointer' }}
+                    >
+                      <Lock size={11} /> PRO
+                    </button>
+                  )}
+                </div>
                 <div className="input-unit-wrapper">
                   <input 
                     type="number" 
                     id="modal-vital-spo2" 
                     min="50" 
                     max="100" 
-                    placeholder="e.g. 98" 
+                    placeholder={isPremium ? "e.g. 98" : "Locked on Free plan"} 
                     className="form-control"
-                    value={spo2}
-                    onChange={(e) => setSpo2(e.target.value)}
+                    value={isPremium ? spo2 : ''}
+                    onChange={(e) => isPremium && setSpo2(e.target.value)}
+                    disabled={!isPremium}
+                    style={!isPremium ? { backgroundColor: 'rgba(255, 255, 255, 0.02)', cursor: 'not-allowed' } : {}}
                   />
                   <span className="input-unit">%</span>
                 </div>

@@ -7,6 +7,28 @@ export interface User {
   id: number;
   email: string;
   role?: string;
+  tier?: 'free' | 'premium';
+  subscription_status?: string;
+  subscription_plan?: string | null;
+  subscription_current_period_end?: string | null;
+}
+
+export interface SubscriptionStatus {
+  tier: 'free' | 'premium';
+  isPremium: boolean;
+  status: string;
+  plan: string | null;
+  subscriptionId?: string | null;
+  currentPeriodEnd: string | null;
+  availablePlans: Record<string, {
+    id: string;
+    name: string;
+    priceINR: number;
+    interval: string;
+    durationDays: number;
+    features: string[];
+  }>;
+  razorpayKeyId?: string | null;
 }
 
 export interface WeightRecord {
@@ -331,5 +353,45 @@ export const api = {
 
   async deleteAdminUser(userId: string) {
     return await request(`/api/admin/users/${userId}`, 'DELETE');
+  },
+
+  // Subscription
+  async getSubscriptionStatus(): Promise<SubscriptionStatus> {
+    return await request('/api/subscription/status', 'GET');
+  },
+
+  async createRazorpayOrder(plan: 'monthly' | 'yearly') {
+    return await request('/api/subscription/create-order', 'POST', { plan });
+  },
+
+  async verifyRazorpayPayment(payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+    plan: 'monthly' | 'yearly';
+  }) {
+    const res = await request('/api/subscription/verify-payment', 'POST', payload);
+    const user = getCurrentUser();
+    if (user) {
+      user.tier = res.tier;
+      user.subscription_status = 'active';
+      user.subscription_plan = res.plan || null;
+      user.subscription_current_period_end = res.currentPeriodEnd || null;
+      setCurrentUser(user);
+    }
+    return res;
+  },
+
+  async simulateSubscriptionUpgrade(plan: 'monthly' | 'yearly', action: 'upgrade' | 'downgrade' = 'upgrade') {
+    const res = await request('/api/subscription/simulate-upgrade', 'POST', { plan, action });
+    const user = getCurrentUser();
+    if (user) {
+      user.tier = res.tier;
+      user.subscription_status = res.tier === 'premium' ? 'active' : 'cancelled';
+      user.subscription_plan = res.plan || null;
+      user.subscription_current_period_end = res.currentPeriodEnd || null;
+      setCurrentUser(user);
+    }
+    return res;
   }
 };

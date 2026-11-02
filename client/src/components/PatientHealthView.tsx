@@ -94,13 +94,7 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
     return `${Math.round(spo2Sum / validSpo2.length)} %`;
   };
 
-  const avgTemp = () => {
-    const validTemp = recentVitals.filter(l => l.temperature !== null && l.temperature !== undefined);
-    if (validTemp.length === 0) return '--';
-    const tempSum = validTemp.reduce((acc, l) => acc + Number(l.temperature), 0);
-    const unit = validTemp[0]?.temperature_unit || 'C';
-    return `${(tempSum / validTemp.length).toFixed(1)} °${unit}`;
-  };
+
 
   const avgFastingGlucose = () => {
     const fasting = sortedGlucose.filter(l => l.context === 'fasting').slice(0, 7);
@@ -398,10 +392,6 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
             <div className="summary-item">
               <div className="summary-label">Avg SpO₂ Saturation</div>
               <div className="summary-value" id="summary-avg-spo2">{avgSpO2()}</div>
-            </div>
-            <div className="summary-item">
-              <div className="summary-label">Avg Body Temp</div>
-              <div className="summary-value" id="summary-avg-temp">{avgTemp()}</div>
             </div>
             <div className="summary-item">
               <div className="summary-label">Avg Fasting Glucose</div>

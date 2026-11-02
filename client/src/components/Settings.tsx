@@ -2,7 +2,8 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Settings as SettingsIcon, LogOut, Download, FileText, 
-  Upload, Database, AlertOctagon, CalendarRange, SlidersHorizontal, X, Check
+  Upload, Database, AlertOctagon, CalendarRange, SlidersHorizontal, X, Check,
+  Sparkles, Crown, ArrowRight
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { Chart, registerables } from 'chart.js';
@@ -82,6 +83,8 @@ interface SettingsProps {
   onLogout: () => void;
   onRefreshData: () => Promise<void>;
   showToast: (msg: string, type?: 'success' | 'danger' | 'warning' | 'info') => void;
+  isPremium?: boolean;
+  onOpenUpgrade?: (feature: string) => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
@@ -92,7 +95,9 @@ export const Settings: React.FC<SettingsProps> = ({
   userEmail,
   onLogout,
   onRefreshData,
-  showToast
+  showToast,
+  isPremium = false,
+  onOpenUpgrade
 }) => {
   const [resetConfirm, setResetConfirm] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -355,7 +360,7 @@ export const Settings: React.FC<SettingsProps> = ({
     ]);
 
     // ── Vitals charts (BP, Heart Rate, SpO2 — three separate charts) ─────────
-    if (vitalsFiltered.length > 1) {
+    if (isPremium && vitalsFiltered.length > 1) {
       const vitalsChronological = [...vitalsFiltered].reverse();
       const vitalsLabels = vitalsChronological.map(v =>
         new Date(v.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -514,7 +519,7 @@ export const Settings: React.FC<SettingsProps> = ({
     };
 
     // ── Glucose charts (Fasting, Pre-Meal, Post-Meal — three separate charts) ────────
-    if (glucoseFiltered.length > 1) {
+    if (isPremium && glucoseFiltered.length > 1) {
       const glucoseChronological = [...glucoseFiltered].reverse();
       const glucoseChartOpts = (yLabel: string) => ({
         animation: false as const,
@@ -637,7 +642,7 @@ export const Settings: React.FC<SettingsProps> = ({
     ]);
 
     // ── Weight chart ─────────────────────────────────────────────────────────
-    if (weightsFiltered.length > 1) {
+    if (isPremium && weightsFiltered.length > 1) {
       const weightChronological = [...weightsFiltered].reverse();
       const weightLabels = weightChronological.map(w =>
         new Date(w.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -1052,6 +1057,10 @@ export const Settings: React.FC<SettingsProps> = ({
 
   // 4. Download Backup (JSON)
   const handleBackupDownload = async () => {
+    if (!isPremium) {
+      onOpenUpgrade?.('JSON Database Backup & Restore');
+      return;
+    }
     let fetchedMedications = [];
     let profile = null;
     try {
@@ -1090,6 +1099,10 @@ export const Settings: React.FC<SettingsProps> = ({
 
   // 5. Trigger Restore upload dialog
   const handleRestoreClick = () => {
+    if (!isPremium) {
+      onOpenUpgrade?.('JSON Database Backup & Restore');
+      return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -1192,6 +1205,11 @@ export const Settings: React.FC<SettingsProps> = ({
   };
 
   const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isPremium) {
+      onOpenUpgrade?.('CSV Wearable Import');
+      e.target.value = '';
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -1576,12 +1594,21 @@ export const Settings: React.FC<SettingsProps> = ({
               </button>
 
               <div className="border-top my-2 pt-3">
-                <h4 className="text-secondary text-sm font-semibold mb-3">Backup & Restore</h4>
+                <div className="d-flex justify-between align-center mb-3">
+                  <h4 className="text-secondary text-sm font-semibold" style={{ margin: 0 }}>Backup & Restore</h4>
+                  {!isPremium && <span className="pro-nav-badge" style={{ cursor: 'pointer' }} onClick={() => onOpenUpgrade?.('JSON Backup & Restore')}>PRO</span>}
+                </div>
                 <div className="d-flex gap-3">
-                  <button className="btn btn-outline w-50" onClick={handleBackupDownload}>
+                  <button 
+                    className="btn btn-outline w-50 d-flex align-center justify-center gap-2" 
+                    onClick={handleBackupDownload}
+                  >
                     <Download size={16} /> Backup Database (JSON)
                   </button>
-                  <button className="btn btn-outline w-50" onClick={handleRestoreClick}>
+                  <button 
+                    className="btn btn-outline w-50 d-flex align-center justify-center gap-2" 
+                    onClick={handleRestoreClick}
+                  >
                     <Upload size={16} /> Restore Backup (JSON)
                   </button>
                   <input 
@@ -1593,10 +1620,23 @@ export const Settings: React.FC<SettingsProps> = ({
                   />
                 </div>
               </div>
+
               <div className="border-top my-2 pt-3">
-                <h4 className="text-secondary text-sm font-semibold mb-3">Wearable Import</h4>
-                <button className="btn btn-outline w-100 justify-center" onClick={handleCSVImportClick}>
-                  <Upload size={16} style={{ marginRight: '8px' }} /> Import Vitals (CSV)
+                <div className="d-flex justify-between align-center mb-3">
+                  <h4 className="text-secondary text-sm font-semibold" style={{ margin: 0 }}>Wearable Import</h4>
+                  {!isPremium && <span className="pro-nav-badge" style={{ cursor: 'pointer' }} onClick={() => onOpenUpgrade?.('CSV Wearable Import')}>PRO</span>}
+                </div>
+                <button 
+                  className="btn btn-outline w-100 justify-center d-flex align-center gap-2" 
+                  onClick={() => {
+                    if (!isPremium) {
+                      onOpenUpgrade?.('CSV Wearable Import');
+                      return;
+                    }
+                    handleCSVImportClick();
+                  }}
+                >
+                  <Upload size={16} /> Import Vitals (CSV)
                 </button>
                 <input 
                   type="file" 
@@ -1620,6 +1660,58 @@ export const Settings: React.FC<SettingsProps> = ({
           </div>
           
           <div className="panel-body py-3">
+            {/* Subscription & Plan Status */}
+            <div className="membership-card">
+              <div className="d-flex justify-between align-center">
+                <span className="text-xs text-secondary font-semibold">Current Membership</span>
+                <span className={`membership-badge ${isPremium ? 'premium' : 'free'}`}>
+                  {isPremium ? 'PREMIUM' : 'FREE'}
+                </span>
+              </div>
+              <div className="d-flex align-center gap-3">
+                <div className="premium-star-icon" style={{ padding: '6px' }}>
+                  {isPremium ? (
+                    <Crown size={18} className="color-primary" />
+                  ) : (
+                    <Sparkles size={18} className="color-primary" />
+                  )}
+                </div>
+                <div>
+                  <div className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {isPremium ? 'VitalDiary Premium Plan' : 'VitalDiary Free Plan'}
+                  </div>
+                  <div className="text-xs text-secondary">
+                    {isPremium ? 'All clinical features, exports & AI active' : 'Core tracking (BP, Glucose, Weight)'}
+                  </div>
+                </div>
+              </div>
+              {!isPremium ? (
+                <button 
+                  type="button"
+                  className="btn btn-primary w-100 d-flex align-center justify-center gap-2"
+                  onClick={() => onOpenUpgrade?.('Premium Membership')}
+                  style={{ marginTop: '0.25rem' }}
+                >
+                  <Sparkles size={15} /> Upgrade to Premium <ArrowRight size={15} />
+                </button>
+              ) : (
+                <button 
+                  type="button"
+                  className="btn btn-outline btn-sm w-100 text-xs"
+                  onClick={async () => {
+                    if (window.confirm('Simulate downgrade back to Free tier for testing?')) {
+                      await api.simulateSubscriptionUpgrade('monthly', 'downgrade');
+                      await onRefreshData();
+                      showToast('Switched to Free tier.', 'info');
+                    }
+                  }}
+                  style={{ marginTop: '0.25rem' }}
+                >
+                  Switch to Free Tier (Dev Test)
+                </button>
+              )}
+            </div>
+
             <div className="mb-4">
               <label className="text-secondary text-xs font-semibold block mb-1">Logged In Account</label>
               <div className="font-semibold text-lg">{userEmail}</div>

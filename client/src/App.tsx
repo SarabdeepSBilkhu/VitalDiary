@@ -18,6 +18,7 @@ import { LogModal } from './components/LogModal';
 import { AiAssistant } from './components/AiAssistant';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Toast } from './components/Toast';
+import { UpgradeModal } from './components/UpgradeModal';
 import type { ToastType } from './components/Toast';
 
 export type HealthRecord = VitalsRecord | GlucoseRecord | WeightRecord | ReportRecord;
@@ -29,6 +30,14 @@ export const App: React.FC = () => {
   
   // Navigation & UI state
   const [activeView, setActiveView] = useState<string>('dashboard-view');
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+  const [upgradeTrigger, setUpgradeTrigger] = useState<string>('');
+  const isPremium = user?.tier === 'premium';
+
+  const handleOpenUpgrade = (featureName: string) => {
+    setUpgradeTrigger(featureName);
+    setIsUpgradeOpen(true);
+  };
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('vital_diary_theme') as 'dark' | 'light') || 'dark';
   });
@@ -84,7 +93,7 @@ export const App: React.FC = () => {
         api.getVitals(),
         api.getGlucose(),
         api.getWeight(),
-        api.getReports(),
+        user.tier === 'premium' ? api.getReports().catch(() => []) : Promise.resolve([]),
         api.getVitalsTrends().catch(() => ({ alerts: [] }))
       ]);
       setVitals(vitalsData);
@@ -286,9 +295,37 @@ export const App: React.FC = () => {
       case 'profile-view':
         return <Profile showToast={showToast} />;
       case 'medications-view':
+        if (!isPremium) {
+          return (
+            <div className="locked-feature-overlay">
+              <div className="premium-star-icon mb-3">
+                <Pill size={32} className="color-primary" />
+              </div>
+              <h2 className="font-bold mb-2">Medications Management is a Premium Feature</h2>
+              <p className="text-secondary text-sm max-w-md mb-4">
+                Track prescriptions, daily schedules, dosages, and insulin logs with seamless adherence tracking.
+              </p>
+              <button 
+                className="btn btn-primary d-flex align-center gap-2"
+                onClick={() => handleOpenUpgrade('Medications Management')}
+              >
+                <Sparkles size={16} /> Upgrade to Premium to Unlock
+              </button>
+            </div>
+          );
+        }
         return <Medications showToast={showToast} />;
       case 'analytics-view':
-        return <Analytics vitals={vitals} glucose={glucose} weights={weights} reports={reports} />;
+        return (
+          <Analytics 
+            vitals={vitals} 
+            glucose={glucose} 
+            weights={weights} 
+            reports={reports} 
+            isPremium={isPremium}
+            onOpenUpgrade={handleOpenUpgrade}
+          />
+        );
       case 'calendar-view':
         return (
           <CalendarView 
@@ -315,6 +352,8 @@ export const App: React.FC = () => {
             onLogout={handleLogout}
             onRefreshData={handleRefreshData}
             showToast={showToast}
+            isPremium={isPremium}
+            onOpenUpgrade={handleOpenUpgrade}
           />
         );
       default:
@@ -397,10 +436,17 @@ export const App: React.FC = () => {
 
           <button 
             className={`nav-item ${activeView === 'medications-view' ? 'active' : ''}`}
-            onClick={() => setActiveView('medications-view')}
+            onClick={() => {
+              if (!isPremium) {
+                handleOpenUpgrade('Medications Management');
+                return;
+              }
+              setActiveView('medications-view');
+            }}
           >
             <Pill size={20} />
             <span>Medications</span>
+            {!isPremium && <span className="pro-nav-badge">PRO</span>}
           </button>
           
           <button 
@@ -524,7 +570,13 @@ export const App: React.FC = () => {
 
         <button 
           className={`mobile-nav-item ${activeView === 'medications-view' ? 'active' : ''}`}
-          onClick={() => setActiveView('medications-view')}
+          onClick={() => {
+            if (!isPremium) {
+              handleOpenUpgrade('Medications Management');
+              return;
+            }
+            setActiveView('medications-view');
+          }}
         >
           <Pill size={22} />
           <span>Medications</span>
@@ -564,6 +616,16 @@ export const App: React.FC = () => {
       </nav>
 
       {/* Unified Log Entry Modal popup */}
+      <UpgradeModal 
+        isOpen={isUpgradeOpen}
+        onClose={() => setIsUpgradeOpen(false)}
+        onSuccess={async () => {
+          await fetchData();
+          showToast('Welcome to VitalDiary Premium! All clinical features are unlocked.', 'success');
+        }}
+        featureTrigger={upgradeTrigger}
+      />
+
       <LogModal 
         isOpen={modalOpen}
         onClose={handleCloseLogModal}

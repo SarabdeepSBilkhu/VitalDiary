@@ -32,19 +32,27 @@ router.post('/register', validate(registerSchema), async (req, res) => {
 
     // Insert user into DB
     const result = await dbQuery.run(
-      `INSERT INTO users (email, password, role) VALUES (?, ?, ?)`,
+      `INSERT INTO users (email, password, role, tier, subscription_status) VALUES (?, ?, ?, 'free', 'inactive')`,
       [email, hashedPassword, role]
     );
 
     const userId = result.lastID;
 
     // Generate JWT Token (includes role for RBAC)
-    const token = jwt.sign({ id: userId, email, role }, JWT_SECRET, { expiresIn: '30d' });
+    const token = jwt.sign({ id: userId, email, role, tier: 'free' }, JWT_SECRET, { expiresIn: '30d' });
 
     res.status(201).json({
       message: 'Account registered successfully.',
       token,
-      user: { id: userId, email, role }
+      user: {
+        id: userId,
+        email,
+        role,
+        tier: 'free',
+        subscription_status: 'inactive',
+        subscription_plan: null,
+        subscription_current_period_end: null
+      }
     });
   } catch (err) {
     console.error('Registration error:', err);
@@ -70,14 +78,37 @@ router.post('/login', validate(loginSchema), async (req, res) => {
     }
 
     const role = user.role || 'patient';
+    let tier = user.tier || 'free';
+    let subscription_status = user.subscription_status || 'inactive';
 
-    // Generate JWT Token (includes role)
-    const token = jwt.sign({ id: user.id, email: user.email, role }, JWT_SECRET, { expiresIn: '30d' });
+    // Auto-check expiry on login
+    if (tier === 'premium' && user.subscription_current_period_end) {
+      const periodEnd = new Date(user.subscription_current_period_end).getTime();
+      if (Number.isFinite(periodEnd) && Date.now() > periodEnd) {
+        tier = 'free';
+        subscription_status = 'expired';
+        await dbQuery.run(
+          `UPDATE users SET tier = 'free', subscription_status = 'expired' WHERE id = ?`,
+          [user.id]
+        );
+      }
+    }
+
+    // Generate JWT Token (includes role and tier)
+    const token = jwt.sign({ id: user.id, email: user.email, role, tier }, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({
       message: 'Login successful.',
       token,
-      user: { id: user.id, email: user.email, role }
+      user: {
+        id: user.id,
+        email,
+        role,
+        tier,
+        subscription_status,
+        subscription_plan: user.subscription_plan || null,
+        subscription_current_period_end: user.subscription_current_period_end || null
+      }
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -88,11 +119,36 @@ router.post('/login', validate(loginSchema), async (req, res) => {
 // 3. Get Current User info (Session Check)
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await dbQuery.get('SELECT id, email, role, created_at FROM users WHERE id = ?', [req.user.id]);
+    const user = await dbQuery.get(
+      `SELECT id, email, role, tier, subscription_status, subscription_plan, 
+              subscription_id, subscription_current_period_end, created_at 
+       FROM users WHERE id = ?`,
+      [req.user.id]
+    );
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
-    res.json(user);
+
+    let tier = user.tier || 'free';
+    let subscription_status = user.subscription_status || 'inactive';
+
+    if (tier === 'premium' && user.subscription_current_period_end) {
+      const periodEnd = new Date(user.subscription_current_period_end).getTime();
+      if (Number.isFinite(periodEnd) && Date.now() > periodEnd) {
+        tier = 'free';
+        subscription_status = 'expired';
+        await dbQuery.run(
+          `UPDATE users SET tier = 'free', subscription_status = 'expired' WHERE id = ?`,
+          [user.id]
+        );
+      }
+    }
+
+    res.json({
+      ...user,
+      tier,
+      subscription_status
+    });
   } catch (err) {
     console.error('Session check error:', err);
     res.status(500).json({ error: 'Server error retrieving session.' });

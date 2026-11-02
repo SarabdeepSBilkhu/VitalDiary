@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { dbQuery } = require('../database');
 const authenticateToken = require('../middleware/auth');
+const { attachSubscription } = require('../middleware/subscription');
 const { searchSimilarLogs } = require('../services/vectorStore');
 
 router.use(authenticateToken);
+router.use(attachSubscription);
 
 // Compact, safety-focused system prompt
 const COMPACT_SYSTEM_PROMPT = `You are VitalDiary AI, a concise personal health assistant.
@@ -506,8 +508,15 @@ router.post('/chat', async (req, res) => {
       }
     }
 
-    // Step 2 & 4: Combine compact system prompt with dynamic context
+    // Step 2 & 4: Combine system prompt with dynamic context based on subscription tier
+    const isPremium = req.userSubscription?.isPremium;
     let fullSystemPrompt = COMPACT_SYSTEM_PROMPT;
+
+    if (isPremium) {
+      fullSystemPrompt += '\n\nTIER: Advanced AI Assistance (Premium). Provide thorough, multi-factorial health analysis connecting vitals, medications, and laboratory profiles. Offer proactive trend evaluations while strictly preserving patient safety and non-diagnostic boundaries.';
+    } else {
+      fullSystemPrompt += '\n\nTIER: Standard AI Assistance (Free). Focus strictly on direct, concise answers to the specific question asked using recent readings.';
+    }
     if (healthContextText) {
       fullSystemPrompt += `\n\nSUPPLIED HEALTH CONTEXT:\n${healthContextText}`;
     }
@@ -526,7 +535,9 @@ router.post('/chat', async (req, res) => {
         ...recentMessages
       ],
       temperature: 0.3,
-      max_tokens: parseInt(process.env.GROQ_MAX_TOKENS, 10) || 500
+      max_tokens: isPremium 
+        ? (parseInt(process.env.GROQ_MAX_TOKENS, 10) || 800)
+        : Math.min(parseInt(process.env.GROQ_MAX_TOKENS, 10) || 500, 450)
     };
 
     // Step 9: Call Groq with retry and error distinction

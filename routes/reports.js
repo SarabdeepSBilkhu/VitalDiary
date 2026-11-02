@@ -7,7 +7,11 @@ const { upsertLogEmbedding, deleteLogEmbedding } = require('../services/vectorSt
 const { getCache, setCache, invalidateCache } = require('../services/cache');
 
 // Apply auth middleware to all routes here
+const { requirePremium } = require('../middleware/subscription');
+
+// Apply auth middleware to all routes here
 router.use(authenticateToken);
+router.use(requirePremium);
 
 /**
  * Decrypt the data field of a report row for API responses.
