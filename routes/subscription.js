@@ -9,11 +9,17 @@ const { attachSubscription } = require('../middleware/subscription');
 // Initialize Razorpay client with fallback handling if keys are not yet in .env
 let razorpayInstance = null;
 const getRazorpay = () => {
-  if (razorpayInstance) return razorpayInstance;
-  const key_id = process.env.RAZORPAY_KEY_ID;
-  const key_secret = process.env.RAZORPAY_KEY_SECRET;
-  if (!key_id || !key_secret) {
+  const rawKeyId = process.env.RAZORPAY_KEY_ID;
+  const rawSecret = process.env.RAZORPAY_KEY_SECRET;
+  if (!rawKeyId || !rawSecret) {
     return null;
+  }
+  // Strip any accidental leading/trailing quotes or whitespace
+  const key_id = rawKeyId.replace(/^["']|["']$/g, '').trim();
+  const key_secret = rawSecret.replace(/^["']|["']$/g, '').trim();
+
+  if (razorpayInstance && razorpayInstance.key_id === key_id && razorpayInstance.key_secret === key_secret) {
+    return razorpayInstance;
   }
   razorpayInstance = new Razorpay({ key_id, key_secret });
   return razorpayInstance;
@@ -124,7 +130,7 @@ router.post('/create-order', authenticateToken, async (req, res) => {
       orderId: order.id,
       amount: order.amount,
       currency: order.currency,
-      keyId: process.env.RAZORPAY_KEY_ID,
+      keyId: (process.env.RAZORPAY_KEY_ID || '').replace(/^["']|["']$/g, '').trim(),
       plan: selectedPlan.id,
       planName: selectedPlan.name
     });
