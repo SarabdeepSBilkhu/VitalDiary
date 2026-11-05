@@ -1685,7 +1685,7 @@ export const Settings: React.FC<SettingsProps> = ({
                   </div>
                 </div>
               </div>
-              {!isPremium ? (
+              {!isPremium && (
                 <button 
                   type="button"
                   className="btn btn-primary w-100 d-flex align-center justify-center gap-2"
@@ -1693,21 +1693,6 @@ export const Settings: React.FC<SettingsProps> = ({
                   style={{ marginTop: '0.25rem' }}
                 >
                   <Sparkles size={15} /> Upgrade to Premium <ArrowRight size={15} />
-                </button>
-              ) : (
-                <button 
-                  type="button"
-                  className="btn btn-outline btn-sm w-100 text-xs"
-                  onClick={async () => {
-                    if (window.confirm('Simulate downgrade back to Free tier for testing?')) {
-                      await api.simulateSubscriptionUpgrade('monthly', 'downgrade');
-                      await onRefreshData();
-                      showToast('Switched to Free tier.', 'info');
-                    }
-                  }}
-                  style={{ marginTop: '0.25rem' }}
-                >
-                  Switch to Free Tier (Dev Test)
                 </button>
               )}
             </div>
