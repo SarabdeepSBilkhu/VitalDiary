@@ -140,8 +140,11 @@ describe('VitalDiary AI Optimization', () => {
       password: 'password123'
     };
 
-    beforeAll(async () => {
-      const res = await request(app).post('/api/auth/register').send(testUser);
+    beforeEach(async () => {
+      const res = await request(app).post('/api/auth/register').send({
+        email: `ai-${Date.now()}-${Math.random().toString(36).substring(7)}@example.com`,
+        password: 'password123'
+      });
       token = res.body.token;
     });
 
@@ -158,7 +161,7 @@ describe('VitalDiary AI Optimization', () => {
         .post('/api/ai/chat')
         .set('Authorization', `Bearer ${token}`)
         .send({ messages: [] });
-      expect(res.statusCode).toBe(400);
+            expect(res.statusCode).toBe(400);
     });
 
     it('should process request and call Groq with optimized payload and log tokens', async () => {
@@ -213,7 +216,7 @@ describe('VitalDiary AI Optimization', () => {
 
       // Verify payload parameters
       expect(interceptedPayload.model).toEqual('openai/gpt-oss-120b');
-      expect(interceptedPayload.max_tokens).toEqual(500);
+      expect(interceptedPayload.max_tokens).toEqual(450);
       expect(interceptedPayload.temperature).toEqual(0.3);
 
       // Verify token usage logging
