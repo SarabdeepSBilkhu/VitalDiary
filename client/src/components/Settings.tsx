@@ -153,6 +153,20 @@ export const Settings: React.FC<SettingsProps> = ({
     );
   };
 
+  const handleToggleDateReports = (reportIds: string[]) => {
+    setSelectedReportIds(prev => {
+      const allSelected = reportIds.length > 0 && reportIds.every(id => prev.includes(id));
+      if (allSelected) {
+        // Deselect all reports for this date
+        return prev.filter(id => !reportIds.includes(id));
+      } else {
+        // Select all reports for this date
+        const next = new Set([...prev, ...reportIds]);
+        return Array.from(next);
+      }
+    });
+  };
+
   const exportRange = useMemo<{ from: Date; to: Date }>(() => {
     const to = new Date();
     to.setHours(23, 59, 59, 999);
@@ -1521,49 +1535,77 @@ export const Settings: React.FC<SettingsProps> = ({
 
                           return (
                             <div className="export-reports-list" style={{ maxHeight: '240px' }}>
-                              {groups.map(group => (
-                                <div key={group.dateLabel}>
-                                  {/* Date group header */}
-                                  <div className="report-date-group-header">
-                                    {group.dateLabel}
-                                    <span className="report-date-group-count">{group.items.length} report{group.items.length !== 1 ? 's' : ''}</span>
-                                  </div>
-                                  {group.items.map(report => {
-                                    const isSelected = selectedReportIds.includes(report.id);
-                                    const reportType = getReportTypeFromRecord(report);
-                                    return (
-                                      <div
-                                        key={report.id}
-                                        className={`export-report-item ${isSelected ? 'selected' : ''}`}
-                                        onClick={() => handleToggleReportSelection(report.id)}
+                              {groups.map(group => {
+                                const groupReportIds = group.items.map(r => r.id);
+                                const isDateFullySelected = groupReportIds.length > 0 && groupReportIds.every(id => selectedReportIds.includes(id));
+                                const isDatePartiallySelected = !isDateFullySelected && groupReportIds.some(id => selectedReportIds.includes(id));
+
+                                return (
+                                  <div key={group.dateLabel}>
+                                    {/* Date group header */}
+                                    <div
+                                      className="report-date-group-header"
+                                      onClick={() => handleToggleDateReports(groupReportIds)}
+                                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                                      title={isDateFullySelected ? 'Deselect all reports for this date' : 'Select all reports for this date'}
+                                    >
+                                      <label
+                                        className="d-flex align-center gap-2"
+                                        style={{ cursor: 'pointer', margin: 0, fontWeight: 700 }}
+                                        onClick={e => e.stopPropagation()}
                                       >
                                         <input
                                           type="checkbox"
-                                          checked={isSelected}
-                                          onChange={() => handleToggleReportSelection(report.id)}
-                                          onClick={e => e.stopPropagation()}
+                                          checked={isDateFullySelected}
+                                          ref={el => {
+                                            if (el) {
+                                              el.indeterminate = isDatePartiallySelected;
+                                            }
+                                          }}
+                                          onChange={() => handleToggleDateReports(groupReportIds)}
                                           style={{ cursor: 'pointer' }}
                                         />
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div className="d-flex align-center gap-2">
-                                            <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
-                                              {reportType}
-                                            </span>
-                                            <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                                              {report.title || reportType}
-                                            </span>
+                                        <span>{group.dateLabel}</span>
+                                      </label>
+                                      <span className="report-date-group-count">{group.items.length} report{group.items.length !== 1 ? 's' : ''}</span>
+                                    </div>
+                                    {group.items.map(report => {
+                                      const isSelected = selectedReportIds.includes(report.id);
+                                      const reportType = getReportTypeFromRecord(report);
+                                      return (
+                                        <div
+                                          key={report.id}
+                                          className={`export-report-item ${isSelected ? 'selected' : ''}`}
+                                          onClick={() => handleToggleReportSelection(report.id)}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => handleToggleReportSelection(report.id)}
+                                            onClick={e => e.stopPropagation()}
+                                            style={{ cursor: 'pointer' }}
+                                          />
+                                          <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div className="d-flex align-center gap-2">
+                                              <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>
+                                                {reportType}
+                                              </span>
+                                              <span className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                                                {report.title || reportType}
+                                              </span>
+                                            </div>
+                                            {report.notes && (
+                                              <p className="text-xs text-muted" style={{ margin: '2px 0 0 0' }}>
+                                                {report.notes}
+                                              </p>
+                                            )}
                                           </div>
-                                          {report.notes && (
-                                            <p className="text-xs text-muted" style={{ margin: '2px 0 0 0' }}>
-                                              {report.notes}
-                                            </p>
-                                          )}
                                         </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ))}
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })}
                             </div>
                           );
                         })()}

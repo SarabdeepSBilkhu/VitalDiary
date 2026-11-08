@@ -41,6 +41,10 @@ const formatShortDate = (ts: string) => {
 
 const formatNumeric = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(2));
 
+const toDateInputValue = (d: Date) => d.toISOString().slice(0, 10);
+
+type TimeframeOption = '7readings' | '30readings' | 'all' | 'custom';
+
 
 /**
  * Returns two invisible datasets that Chart.js will fill between, creating a
@@ -168,7 +172,11 @@ interface AnalyticsProps {
 
 export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, reports, isPremium = false, onOpenUpgrade }) => {
   const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight' | 'reports'>('bp');
-  const [timeframe, setTimeframe] = useState<'7readings' | '30readings' | 'all'>('30readings');
+  const [timeframe, setTimeframe] = useState<TimeframeOption>('30readings');
+  const today = toDateInputValue(new Date());
+  const thirtyDaysAgo = toDateInputValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+  const [customFrom, setCustomFrom] = useState(thirtyDaysAgo);
+  const [customTo, setCustomTo] = useState(today);
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('CBC');
   const [selectedParam, setSelectedParam] = useState<string>('');
   const [trendModalParam, setTrendModalParam] = useState<string>('');
@@ -184,13 +192,30 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     return () => { cancelled = true; };
   }, []);
 
-  // 1. Filter logs by metric and readings count
+  // 1. Filter logs by metric and readings count / date range
   const filteredLogs = useMemo(() => {
     let sourceLogs: any[];
     if (metric === 'glucose') sourceLogs = glucose;
     else if (metric === 'weight') sourceLogs = weights;
     else if (metric === 'reports') sourceLogs = reports;
     else sourceLogs = vitals;
+
+    // Filter by custom range if selected
+    if (timeframe === 'custom') {
+      const from = new Date(customFrom);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(customTo);
+      to.setHours(23, 59, 59, 999);
+
+      const inRange = sourceLogs.filter(log => {
+        const t = new Date(log.timestamp).getTime();
+        return t >= from.getTime() && t <= to.getTime();
+      });
+
+      return inRange.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+    }
 
     // Sort descending by timestamp (most recent first)
     const sortedDesc = [...sourceLogs].sort(
@@ -206,7 +231,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
     // Return in chronological order (oldest to newest) for chart plotting
     return [...sliced].reverse();
-  }, [metric, timeframe, vitals, glucose, weights, reports]);
+  }, [metric, timeframe, customFrom, customTo, vitals, glucose, weights, reports]);
 
   // 2. Collect available parameters when in report mode
   const availableParams = useMemo(() => {
@@ -841,7 +866,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
             <div className="filter-group">
               <label
                 htmlFor="analytics-timeframe-select"
-                style={{ display: 'block', marginBottom: '8px', marginTop: '8px' }}
+                style={{ display: 'block', marginBottom: '8px' }}
               >
                 Range
               </label>
@@ -855,7 +880,38 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                 <option value="7readings">Last 7 Readings</option>
                 <option value="30readings">Last 30 Readings</option>
                 <option value="all">All Readings</option>
+                <option value="custom">Custom Date Range</option>
               </select>
+            </div>
+          )}
+
+          {metric !== 'reports' && timeframe === 'custom' && (
+            <div className="d-flex gap-3 align-center" style={{ flexWrap: 'wrap' }}>
+              <div className="filter-group">
+                <label style={{ display: 'block', marginBottom: '8px' }}>
+                  From
+                </label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={customFrom}
+                  max={customTo}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                />
+              </div>
+              <div className="filter-group">
+                <label style={{ display: 'block', marginBottom: '8px' }}>
+                  To
+                </label>
+                <input
+                  type="date"
+                  className="form-control"
+                  value={customTo}
+                  min={customFrom}
+                  max={today}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                />
+              </div>
             </div>
           )}
         </div>
