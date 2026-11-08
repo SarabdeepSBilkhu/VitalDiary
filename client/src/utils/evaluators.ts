@@ -60,6 +60,16 @@ export function evaluateSpO2(spo2: number | null): EvaluationResult {
   return { status: "Critical", className: "status-high" };
 }
 
+// Temperature Evaluator
+export function evaluateTemperature(temp?: number | null, unit: 'C' | 'F' = 'C'): EvaluationResult {
+  if (temp === null || temp === undefined || isNaN(temp)) return { status: "--", className: "status-neutral" };
+  const tempC = unit === 'F' ? (temp - 32) * (5 / 9) : temp;
+  if (tempC < 35.0) return { status: "Hypothermia", className: "status-low" };
+  if (tempC >= 38.0) return { status: "Fever", className: "status-high" };
+  if (tempC >= 37.5) return { status: "Low Fever", className: "status-elevated" };
+  return { status: "Normal", className: "status-normal" };
+}
+
 /**
  * Parses height string with arbitrary units into meters.
  * Supports:

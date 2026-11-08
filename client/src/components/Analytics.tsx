@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Calculator, LineChart as ChartIcon, FlaskConical, FileText, X, TrendingUp } from 'lucide-react';
 import type { VitalsRecord, GlucoseRecord } from '../utils/evaluators';
 import { api, type WeightRecord, type ReportRecord, type ProfileRecord } from '../utils/api';
-import { evaluateBP, evaluateHR, evaluateSpO2, evaluateGlucose, formatDateLabel, calculateNormalWeightRange } from '../utils/evaluators';
+import { evaluateBP, evaluateHR, evaluateSpO2, evaluateTemperature, evaluateGlucose, formatDateLabel, calculateNormalWeightRange } from '../utils/evaluators';
 import { Line } from 'react-chartjs-2';
 import {
   parseReportParameters,
@@ -171,7 +171,7 @@ interface AnalyticsProps {
 }
 
 export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, reports, isPremium = false, onOpenUpgrade }) => {
-  const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'glucose' | 'weight' | 'reports'>('bp');
+  const [metric, setMetric] = useState<'bp' | 'hr' | 'spo2' | 'temperature' | 'glucose' | 'weight' | 'reports'>('bp');
   const [timeframe, setTimeframe] = useState<TimeframeOption>('30readings');
   const today = toDateInputValue(new Date());
   const thirtyDaysAgo = toDateInputValue(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
@@ -390,6 +390,31 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
         });
       }
 
+    } else if (metric === 'temperature') {
+      const tempLogs = (filteredLogs as VitalsRecord[]).filter(l => l.temperature !== null && l.temperature !== undefined && !isNaN(Number(l.temperature)));
+      if (tempLogs.length > 0) {
+        // Normalize to Celsius for stats comparison
+        const toC = (l: VitalsRecord) => (l.temperature_unit === 'F' ? (Number(l.temperature) - 32) * (5 / 9) : Number(l.temperature));
+        const cValues = tempLogs.map(toC);
+        const avgC = cValues.reduce((a, b) => a + b, 0) / cValues.length;
+        // Display in preferred unit of latest entry
+        const latestUnit = tempLogs[tempLogs.length - 1].temperature_unit || 'C';
+        const displayVal = (c: number) => (latestUnit === 'F' ? ((c * 9 / 5) + 32).toFixed(1) : c.toFixed(1));
+
+        results.avg = `${displayVal(avgC)} °${latestUnit}`;
+        const maxC = Math.max(...cValues);
+        const minC = Math.min(...cValues);
+        results.highest = `${displayVal(maxC)} °${latestUnit}`;
+        results.lowest = `${displayVal(minC)} °${latestUnit}`;
+
+        tempLogs.forEach(log => {
+          const e = evaluateTemperature(Number(log.temperature), log.temperature_unit || 'C');
+          if (e.className === 'status-normal') normalCount++;
+          else if (e.className === 'status-elevated') warningCount++;
+          else criticalCount++;
+        });
+      }
+
     } else if (metric === 'glucose') {
       const glLogs = filteredLogs as GlucoseRecord[];
 
@@ -571,6 +596,48 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
             labels.length,
             95,
             100
+          )
+        ]
+      };
+
+    } else if (metric === 'temperature') {
+      const tempLogs = filteredLogs as VitalsRecord[];
+      // Determine predominant or latest unit for the axis
+      const validTempLogs = tempLogs.filter(l => l.temperature !== null && l.temperature !== undefined);
+      const targetUnit = validTempLogs.length > 0 && validTempLogs[validTempLogs.length - 1].temperature_unit === 'F' ? 'F' : 'C';
+
+      const data = tempLogs.map(l => {
+        if (l.temperature === null || l.temperature === undefined) return null;
+        const val = Number(l.temperature);
+        if (isNaN(val)) return null;
+        const currentUnit = l.temperature_unit || 'C';
+        if (currentUnit === targetUnit) return val;
+        // Convert
+        return targetUnit === 'F' ? Number(((val * 9 / 5) + 32).toFixed(1)) : Number(((val - 32) * (5 / 9)).toFixed(1));
+      });
+
+      const normalMin = targetUnit === 'F' ? 97.0 : 36.1;
+      const normalMax = targetUnit === 'F' ? 99.0 : 37.2;
+
+      return {
+        labels,
+        datasets: [
+          {
+            label: `Temperature (°${targetUnit})`,
+            data,
+            borderColor: 'hsl(25, 95%, 55%)',
+            backgroundColor: 'transparent',
+            borderWidth: 3,
+            tension: 0.25,
+            fill: false,
+            spanGaps: true,
+            pointBackgroundColor: 'hsl(25, 95%, 55%)',
+            order: 1
+          },
+          ...makeNormalBand(
+            labels.length,
+            normalMin,
+            normalMax
           )
         ]
       };
@@ -818,6 +885,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     bp: 'Blood Pressure Trends',
     hr: 'Heart Rate (BPM) Log',
     spo2: 'Oxygen Saturation (SpO₂) History',
+    temperature: 'Body Temperature History',
     glucose: 'Blood Glucose Levels',
     weight: 'Weight Tracker History',
     reports: 'Medical Report Parameter Trends',
@@ -856,6 +924,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
               <option value="bp">Blood Pressure</option>
               <option value="hr">Heart Rate {!isPremium ? '(PRO)' : ''}</option>
               <option value="spo2">Blood Oxygen (SpO₂) {!isPremium ? '(PRO)' : ''}</option>
+              <option value="temperature">Body Temperature</option>
               <option value="glucose">Blood Glucose</option>
               <option value="weight">Body Weight</option>
               <option value="reports">Medical Reports {!isPremium ? '(PRO)' : ''}</option>

@@ -289,35 +289,14 @@ async function initDatabase(retries = 15, delay = 4000) {
         )
       `);
 
-      // 9. Caregiver Links Table
-      await dbQuery.run(`
-        CREATE TABLE IF NOT EXISTS caregiver_links (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          caregiver_id INTEGER NOT NULL,
-          patient_id INTEGER NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending',
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (caregiver_id) REFERENCES users (id) ON DELETE CASCADE,
-          FOREIGN KEY (patient_id) REFERENCES users (id) ON DELETE CASCADE,
-          UNIQUE(caregiver_id, patient_id)
-        )
-      `);
-
-      // Migration: add status column to existing caregiver_links rows,
-      // defaulting to 'accepted' so pre-existing approved links are preserved.
-      try {
-        await dbQuery.run(`ALTER TABLE caregiver_links ADD COLUMN status TEXT NOT NULL DEFAULT 'accepted'`);
-      } catch (err) {
-        // Column already exists — expected on subsequent boots
-      }
+      // Clean up deprecated caregiver_links table if it exists
+      await dbQuery.run(`DROP TABLE IF EXISTS caregiver_links`);
 
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_vitals_user_time ON vitals(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_glucose_user_time ON glucose(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_weight_user_time ON weight(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_reports_user_time ON reports(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_medications_user_name ON medications(user_id, name)`);
-      await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id, timestamp DESC)`);
-      await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_caregiver_links ON caregiver_links(caregiver_id)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id, timestamp DESC)`);
 
       console.log('Database schemas successfully verified/created.');

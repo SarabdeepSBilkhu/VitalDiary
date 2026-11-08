@@ -645,6 +645,8 @@ export const App: React.FC = () => {
         onSaveReport={handleSaveReport}
         showToast={showToast}
         selectedCalendarDate={calendarDate}
+        isPremium={isPremium}
+        onOpenUpgrade={handleOpenUpgrade}
       />
 
       {/* Database waking status loader for cold-starts */}
