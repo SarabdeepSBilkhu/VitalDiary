@@ -1,7 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const path = require('path');
-const fs = require('fs');
 
 // Prioritize private URL for internal communication (faster and doesn't require SSL)
 const connectionString = process.env.DATABASE_PRIVATE_URL || process.env.DATABASE_URL;
@@ -140,31 +139,7 @@ async function initDatabase(retries = 15, delay = 4000) {
         )
       `);
 
-      // Add role column to existing databases (migration)
-      try {
-        await dbQuery.run(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'patient'`);
-      } catch (err) {
-        // Column already exists — expected on subsequent boots
-      }
-
-      // Add subscription / tier columns to existing databases (migrations)
-      const tierMigrations = [
-        `ALTER TABLE users ADD COLUMN tier TEXT NOT NULL DEFAULT 'free'`,
-        `ALTER TABLE users ADD COLUMN subscription_status TEXT NOT NULL DEFAULT 'inactive'`,
-        `ALTER TABLE users ADD COLUMN subscription_plan TEXT DEFAULT NULL`,
-        `ALTER TABLE users ADD COLUMN subscription_id TEXT DEFAULT NULL`,
-        `ALTER TABLE users ADD COLUMN subscription_current_period_end DATETIME DEFAULT NULL`
-      ];
-
-      for (const sql of tierMigrations) {
-        try {
-          await dbQuery.run(sql);
-        } catch (err) {
-          // Column already exists — expected on subsequent boots
-        }
-      }
-
-      // 2. Vitals Table (Blood pressure, heart rate, spo2)
+      // 2. Vitals Table (Blood pressure, heart rate, spo2, temperature)
       await dbQuery.run(`
         CREATE TABLE IF NOT EXISTS vitals (
           id TEXT PRIMARY KEY,
@@ -180,25 +155,6 @@ async function initDatabase(retries = 15, delay = 4000) {
           FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
       `);
-
-      // Migration: allow NULL hr on existing databases if needed
-      if (isPg) {
-        try {
-          await dbQuery.run(`ALTER TABLE vitals ALTER COLUMN hr DROP NOT NULL`);
-          await dbQuery.run(`ALTER TABLE vitals ALTER COLUMN systolic DROP NOT NULL`);
-          await dbQuery.run(`ALTER TABLE vitals ALTER COLUMN diastolic DROP NOT NULL`);
-        } catch (err) {
-          // Ignored if already nullable
-        }
-      }
-
-      // Migration: add temperature columns to existing vitals table
-      try {
-        await dbQuery.run(`ALTER TABLE vitals ADD COLUMN temperature REAL`);
-        await dbQuery.run(`ALTER TABLE vitals ADD COLUMN temperature_unit TEXT`);
-      } catch (err) {
-        // Column already exists
-      }
 
       // 3. Blood Glucose Table
       await dbQuery.run(`
@@ -270,13 +226,6 @@ async function initDatabase(retries = 15, delay = 4000) {
         )
       `);
 
-      try {
-        await dbQuery.run(`ALTER TABLE medications ADD COLUMN is_insulin INTEGER DEFAULT 0`);
-      } catch (err) {
-        // Column already exists or table doesn't support ALTER
-      }
-
-      // Create indexes for efficient retrieval scoped by user and ordered by time
       // 8. Audit Log Table
       await dbQuery.run(`
         CREATE TABLE IF NOT EXISTS audit_log (
@@ -292,6 +241,7 @@ async function initDatabase(retries = 15, delay = 4000) {
       // Clean up deprecated caregiver_links table if it exists
       await dbQuery.run(`DROP TABLE IF EXISTS caregiver_links`);
 
+      // Create indexes for efficient retrieval scoped by user and ordered by time
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_vitals_user_time ON vitals(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_glucose_user_time ON glucose(user_id, timestamp DESC)`);
       await dbQuery.run(`CREATE INDEX IF NOT EXISTS idx_weight_user_time ON weight(user_id, timestamp DESC)`);
