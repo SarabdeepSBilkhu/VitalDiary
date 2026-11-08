@@ -222,6 +222,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
       'Lipid Profile': [],
       'Thyroid Profile': [],
       HbA1c: [],
+      ABG: [],
       'Urine Report': [],
       'Other Reports': [],
     };
@@ -313,7 +314,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
     let criticalCount = 0;
 
     if (metric === 'bp') {
-      const bpLogs = filteredLogs as VitalsRecord[];
+      const allBpLogs = filteredLogs as VitalsRecord[];
+      const bpLogs = allBpLogs.filter(l => l.systolic != null && l.diastolic != null && !isNaN(Number(l.systolic)) && !isNaN(Number(l.diastolic)));
       results.avg = bpLogs.length > 0
         ? `${Math.round(bpLogs.reduce((a, b) => a + Number(b.systolic), 0) / bpLogs.length)}/${Math.round(bpLogs.reduce((a, b) => a + Number(b.diastolic), 0) / bpLogs.length)} mmHg`
         : '--/-- mmHg';
@@ -464,7 +466,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
         datasets: [
           {
             label: 'Systolic (BP High)',
-            data: bpLogs.map(l => l.systolic),
+            data: bpLogs.map(l => l.systolic ?? null),
+            spanGaps: true,
             borderColor: 'hsl(355, 78%, 56%)',
             backgroundColor: 'hsla(355, 78%, 56%, 0.10)',
             borderWidth: 3,
@@ -477,7 +480,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
 
           {
             label: 'Diastolic (BP Low)',
-            data: bpLogs.map(l => l.diastolic),
+            data: bpLogs.map(l => l.diastolic ?? null),
+            spanGaps: true,
             borderColor: 'hsl(200, 85%, 55%)',
             backgroundColor: 'hsla(200, 85%, 55%, 0.10)',
             borderWidth: 3,

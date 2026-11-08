@@ -46,7 +46,7 @@ function getQuestionCategories(message) {
     categories.add('medications');
   }
 
-  if (/report|reports|lab result|lab results|test result|test results|blood test|urine test|biopsy|scan|panel/i.test(q)) {
+  if (/report|reports|lab result|lab results|test result|test results|blood test|urine test|biopsy|scan|panel|abg|arterial blood gas/i.test(q)) {
     categories.add('reports');
   }
 
@@ -129,8 +129,9 @@ async function fetchRelevantHealthData(userId, categories) {
     // Calculate active BP and heart rate alerts
     const alerts = [];
     if (data.recentVitals && data.recentVitals.length > 0) {
-      const avgSys = data.recentVitals.reduce((acc, log) => acc + log.systolic, 0) / data.recentVitals.length;
-      const avgDia = data.recentVitals.reduce((acc, log) => acc + log.diastolic, 0) / data.recentVitals.length;
+      const validBP = data.recentVitals.filter(l => l.systolic != null && l.diastolic != null);
+      const avgSys = validBP.length ? validBP.reduce((acc, log) => acc + log.systolic, 0) / validBP.length : null;
+      const avgDia = validBP.length ? validBP.reduce((acc, log) => acc + log.diastolic, 0) / validBP.length : null;
       const avgHr  = data.recentVitals.reduce((acc, log) => acc + log.hr, 0) / data.recentVitals.length;
 
       if (avgSys >= 140 || avgDia >= 90) alerts.push('High blood pressure trend (Stage 2 Hypertension)');
@@ -219,7 +220,7 @@ function buildHealthContext(categories, data) {
 
         if (data.recentVitals && data.recentVitals.length > 0) {
           const readings = data.recentVitals
-            .map(v => `${formatDate(v.timestamp)}: ${v.systolic}/${v.diastolic} mmHg (HR ${v.hr} bpm)`)
+            .map(v => `${formatDate(v.timestamp)}: ${v.systolic != null && v.diastolic != null ? `${v.systolic}/${v.diastolic} mmHg` : 'BP N/A'}${v.hr ? ` (HR ${v.hr} bpm)` : ''}`)
             .join('; ');
           parts.push(`Recent readings (newest first): ${readings}`);
         }

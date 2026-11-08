@@ -344,8 +344,9 @@ export const Settings: React.FC<SettingsProps> = ({
       { name: "Medical Status", x: 135 }, { name: "Notes", x: 165 }
     ];
 
-    const avgSysPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.systolic), 0) / vitalsFiltered.length) : 0;
-    const avgDiaPeriod = vitalsFiltered.length ? Math.round(vitalsFiltered.reduce((a, b) => a + Number(b.diastolic), 0) / vitalsFiltered.length) : 0;
+    const bpReadings = vitalsFiltered.filter(v => v.systolic != null && v.diastolic != null && !isNaN(Number(v.systolic)) && !isNaN(Number(v.diastolic)));
+    const avgSysPeriod = bpReadings.length ? Math.round(bpReadings.reduce((a, b) => a + Number(b.systolic), 0) / bpReadings.length) : 0;
+    const avgDiaPeriod = bpReadings.length ? Math.round(bpReadings.reduce((a, b) => a + Number(b.diastolic), 0) / bpReadings.length) : 0;
     const hrReadings = vitalsFiltered.filter(v => v.hr !== null && v.hr !== undefined && !isNaN(Number(v.hr)));
     const avgHrPeriod = hrReadings.length ? Math.round(hrReadings.reduce((a, b) => a + Number(b.hr), 0) / hrReadings.length) : 0;
     const spo2Readings = vitalsFiltered.filter(v => v.spo2 !== null && v.spo2 !== undefined);
@@ -381,8 +382,8 @@ export const Settings: React.FC<SettingsProps> = ({
         data: {
           labels: vitalsLabels,
           datasets: [
-            { label: 'Systolic (mmHg)', data: vitalsChronological.map(v => v.systolic), borderColor: 'rgb(220, 80, 80)', backgroundColor: 'rgba(220, 80, 80, 0.07)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 },
-            { label: 'Diastolic (mmHg)', data: vitalsChronological.map(v => v.diastolic), borderColor: 'rgb(79, 93, 200)', backgroundColor: 'rgba(79, 93, 200, 0.07)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 },
+            { label: 'Systolic (mmHg)', data: vitalsChronological.map(v => v.systolic ?? null), spanGaps: true, borderColor: 'rgb(220, 80, 80)', backgroundColor: 'rgba(220, 80, 80, 0.07)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 },
+            { label: 'Diastolic (mmHg)', data: vitalsChronological.map(v => v.diastolic ?? null), spanGaps: true, borderColor: 'rgb(79, 93, 200)', backgroundColor: 'rgba(79, 93, 200, 0.07)', fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 },
           ]
         },
         options: vChartOpts('mmHg')
@@ -447,13 +448,15 @@ export const Settings: React.FC<SettingsProps> = ({
       vitalsFiltered.forEach(v => {
         if (y + 7 > 280) drawContinuationHeader("1. BLOOD PRESSURE & HEART RATE (Cont.)", [79, 93, 117], vitalsCols);
         doc.setFontSize(8);
-        const bpStatus = evaluateBP(v.systolic, v.diastolic).status
-          .replace("Stage 1 Hypertension", "Stage 1 HTN")
-          .replace("Stage 2 Hypertension", "Stage 2 HTN")
-          .replace("Hypertensive Crisis", "Crisis");
+        const bpStatus = (v.systolic != null && v.diastolic != null) 
+          ? evaluateBP(v.systolic, v.diastolic).status
+              .replace("Stage 1 Hypertension", "Stage 1 HTN")
+              .replace("Stage 2 Hypertension", "Stage 2 HTN")
+              .replace("Hypertensive Crisis", "Crisis")
+          : '--';
         const noteLines = doc.splitTextToSize(v.notes || '', 20).slice(0, 2);
         doc.text(fmtDT(v.timestamp), 16, y);
-        doc.text(`${v.systolic}/${v.diastolic} mmHg`, 60, y);
+        doc.text(v.systolic != null && v.diastolic != null ? `${v.systolic}/${v.diastolic} mmHg` : 'N/A', 60, y);
         doc.text(v.hr ? `${v.hr} bpm` : 'N/A', 90, y);
         doc.text(v.spo2 ? `${v.spo2}%` : 'N/A', 115, y);
         doc.text(bpStatus, 135, y);

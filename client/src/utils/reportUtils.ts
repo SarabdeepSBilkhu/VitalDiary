@@ -138,7 +138,7 @@ export function formatReportDataAsText(text: string): string {
   return text;
 }
 
-export const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Urine Report', 'Other Reports'] as const;
+export const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'ABG', 'Urine Report', 'Other Reports'] as const;
 
 export type ReportType = typeof REPORT_TYPE_OPTIONS[number];
 
@@ -150,6 +150,7 @@ export const normalizeReportType = (value: string): ReportType => {
   if (lower.includes('lipid')) return 'Lipid Profile';
   if (lower.includes('thyroid')) return 'Thyroid Profile';
   if (lower.includes('hba1c')) return 'HbA1c';
+  if (lower.includes('abg') || lower.includes('arterial blood gas')) return 'ABG';
   if (lower.includes('urine')) return 'Urine Report';
   return 'Other Reports';
 };
@@ -346,6 +347,35 @@ const NORMAL_RANGE_ENTRIES: {
   { keywords: ['magnesium', 'mg'],
     range: [1.7, 2.2] },
 
+
+
+  // =========================
+  // ABG (Arterial Blood Gas)
+  // =========================
+
+  { keywords: ['arterial ph', 'blood ph', 'abg ph', 'ph'],
+    range: [7.35, 7.45] },
+
+  { keywords: ['paco2', 'pco2', 'partial pressure of carbon dioxide'],
+    range: [35, 45] },
+
+  { keywords: ['pao2', 'po2', 'partial pressure of oxygen'],
+    range: [75, 100] },
+
+  { keywords: ['hco3', 'bicarbonate', 'actual bicarbonate', 'act hco3', 'std hco3'],
+    range: [22, 26] },
+
+  { keywords: ['base excess', 'be', 'be(b)', 'beecf'],
+    range: [-2, 2] },
+
+  { keywords: ['sao2', 'o2 sat', 'oxygen saturation (arterial)'],
+    range: [95, 100] },
+
+  { keywords: ['lactate', 'lactic acid'],
+    range: [0.5, 2.2] },
+
+  { keywords: ['anion gap'],
+    range: [8, 16] },
 
   // =========================
   // URINE

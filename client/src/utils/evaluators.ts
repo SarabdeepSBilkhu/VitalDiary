@@ -3,8 +3,8 @@
 export interface VitalsRecord {
   id: string;
   timestamp: string;
-  systolic: number;
-  diastolic: number;
+  systolic?: number | null;
+  diastolic?: number | null;
   hr?: number | null;
   spo2: number | null;
   temperature?: number | null;
@@ -26,7 +26,10 @@ export interface EvaluationResult {
 }
 
 // Blood Pressure Evaluator (AHA Guidelines)
-export function evaluateBP(sys: number, dia: number): EvaluationResult {
+export function evaluateBP(sys?: number | null, dia?: number | null): EvaluationResult {
+  if (sys === null || sys === undefined || dia === null || dia === undefined || isNaN(sys) || isNaN(dia)) {
+    return { status: "--", className: "status-neutral" };
+  }
   if (sys > 180 || dia > 120) {
     return { status: "Crisis", className: "status-high" };
   } else if (sys >= 140 || dia >= 90) {

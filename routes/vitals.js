@@ -45,7 +45,7 @@ router.post('/', validate(createVitalsSchema), async (req, res) => {
     await dbQuery.run(
       `INSERT INTO vitals (id, user_id, timestamp, systolic, diastolic, hr, spo2, temperature, temperature_unit, notes) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [recordId, req.user.id, timestamp, systolic, diastolic, hr !== undefined && hr !== null && hr !== '' ? hr : null, spo2 || null, temperature || null, temperature_unit || null, notes || '']
+      [recordId, req.user.id, timestamp, systolic !== undefined && systolic !== null && systolic !== '' ? systolic : null, diastolic !== undefined && diastolic !== null && diastolic !== '' ? diastolic : null, hr !== undefined && hr !== null && hr !== '' ? hr : null, spo2 || null, temperature || null, temperature_unit || null, notes || '']
     );
 
     const newLog = await dbQuery.get('SELECT * FROM vitals WHERE id = ?', [recordId]);
@@ -78,7 +78,7 @@ router.put('/:id', validate(updateVitalsSchema), async (req, res) => {
       `UPDATE vitals 
        SET timestamp = ?, systolic = ?, diastolic = ?, hr = ?, spo2 = ?, temperature = ?, temperature_unit = ?, notes = ? 
        WHERE id = ? AND user_id = ?`,
-      [timestamp, systolic, diastolic, hr !== undefined && hr !== null && hr !== '' ? hr : null, spo2 || null, temperature || null, temperature_unit || null, notes || '', id, req.user.id]
+      [timestamp, systolic !== undefined && systolic !== null && systolic !== '' ? systolic : null, diastolic !== undefined && diastolic !== null && diastolic !== '' ? diastolic : null, hr !== undefined && hr !== null && hr !== '' ? hr : null, spo2 || null, temperature || null, temperature_unit || null, notes || '', id, req.user.id]
     );
 
     const updatedLog = await dbQuery.get('SELECT * FROM vitals WHERE id = ?', [id]);
@@ -139,8 +139,8 @@ router.post('/restore', requirePremium, async (req, res) => {
           log.id || `vital-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           req.user.id,
           log.timestamp,
-          log.systolic,
-          log.diastolic,
+          log.systolic !== undefined && log.systolic !== null && log.systolic !== '' ? log.systolic : null,
+          log.diastolic !== undefined && log.diastolic !== null && log.diastolic !== '' ? log.diastolic : null,
           log.hr !== undefined && log.hr !== null && log.hr !== '' ? log.hr : null,
           log.spo2 !== undefined ? log.spo2 : null,
           log.temperature !== undefined ? log.temperature : null,
@@ -175,16 +175,17 @@ router.get('/trends', async (req, res) => {
     if (logs.length > 0) {
       // Calculate averages for recent (up to 7) logs
       const recentLogs = logs.slice(0, 7);
-      const avgSys = recentLogs.reduce((acc, log) => acc + log.systolic, 0) / recentLogs.length;
-      const avgDia = recentLogs.reduce((acc, log) => acc + log.diastolic, 0) / recentLogs.length;
+      const validBP = recentLogs.filter(l => l.systolic != null && l.diastolic != null);
+      const avgSys = validBP.length ? validBP.reduce((acc, log) => acc + log.systolic, 0) / validBP.length : null;
+      const avgDia = validBP.length ? validBP.reduce((acc, log) => acc + log.diastolic, 0) / validBP.length : null;
       const avgHr = recentLogs.reduce((acc, log) => acc + log.hr, 0) / recentLogs.length;
 
       // Basic threshold checks based on averages
-      if (avgSys >= 140 || avgDia >= 90) {
+      if (avgSys != null && avgDia != null && (avgSys >= 140 || avgDia >= 90)) {
         alerts.push({ type: 'warning', message: 'Recent blood pressure averages are high (Stage 2 Hypertension).' });
-      } else if (avgSys >= 130 || avgDia >= 80) {
+      } else if (avgSys != null && avgDia != null && (avgSys >= 130 || avgDia >= 80)) {
         alerts.push({ type: 'info', message: 'Recent blood pressure averages are slightly elevated (Stage 1 Hypertension).' });
-      } else if (avgSys < 90 || avgDia < 60) {
+      } else if (avgSys != null && avgDia != null && (avgSys < 90 || avgDia < 60)) {
         alerts.push({ type: 'warning', message: 'Recent blood pressure averages are low (Hypotension).' });
       }
 
@@ -197,7 +198,7 @@ router.get('/trends', async (req, res) => {
       // Check for extreme recent single values (last 2 logs)
       const latestLogs = logs.slice(0, 2);
       for (const log of latestLogs) {
-        if (log.systolic >= 180 || log.diastolic >= 120) {
+        if (log.systolic != null && log.diastolic != null && (log.systolic >= 180 || log.diastolic >= 120)) {
           alerts.push({ type: 'danger', message: 'CRITICAL: Very high blood pressure detected in a recent reading. Consult a doctor immediately.' });
           break;
         }
@@ -239,15 +240,17 @@ router.post('/import', requirePremium, upload.single('file'), async (req, res) =
 
       // Map flexible column names
       const timestamp = row.timestamp || row.date || row.datetime || row.time;
-      const systolic = parseInt(row.systolic || row.sys || row.sbp, 10);
-      const diastolic = parseInt(row.diastolic || row.dia || row.dbp, 10);
+      const rawSys = row.systolic || row.sys || row.sbp;
+      const rawDia = row.diastolic || row.dia || row.dbp;
+      const systolic = rawSys && !isNaN(parseInt(rawSys, 10)) ? parseInt(rawSys, 10) : null;
+      const diastolic = rawDia && !isNaN(parseInt(rawDia, 10)) ? parseInt(rawDia, 10) : null;
       const rawHr = row.hr || row.heart_rate || row.pulse;
       const hr = rawHr ? parseInt(rawHr, 10) : null;
       const spo2 = row.spo2 || row.oxygen || row.sp_o2 ? parseInt(row.spo2 || row.oxygen || row.sp_o2, 10) : null;
       const notes = row.notes || row.note || row.comment || '';
 
-      if (!timestamp || isNaN(systolic) || isNaN(diastolic)) {
-        errors.push({ row: rowNum, error: 'Missing or invalid required columns (timestamp, systolic, diastolic).' });
+      if (!timestamp) {
+        errors.push({ row: rowNum, error: 'Missing required timestamp column.' });
         continue;
       }
 

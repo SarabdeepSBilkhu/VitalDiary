@@ -74,10 +74,11 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
   const recentVitals = sortedVitals.slice(0, 7);
 
   const avgBP = () => {
-    if (recentVitals.length === 0) return '--/-- mmHg';
-    const sysSum = recentVitals.reduce((acc, l) => acc + Number(l.systolic), 0);
-    const dbDiaSum = recentVitals.reduce((acc, l) => acc + Number(l.diastolic), 0);
-    return `${Math.round(sysSum / recentVitals.length)}/${Math.round(dbDiaSum / recentVitals.length)} mmHg`;
+    const validBP = recentVitals.filter(l => l.systolic != null && l.diastolic != null && !isNaN(Number(l.systolic)) && !isNaN(Number(l.diastolic)));
+    if (validBP.length === 0) return '--/-- mmHg';
+    const sysSum = validBP.reduce((acc, l) => acc + Number(l.systolic), 0);
+    const dbDiaSum = validBP.reduce((acc, l) => acc + Number(l.diastolic), 0);
+    return `${Math.round(sysSum / validBP.length)}/${Math.round(dbDiaSum / validBP.length)} mmHg`;
   };
 
   const avgHR = () => {
@@ -128,7 +129,8 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
     datasets: [
       {
         label: 'Systolic',
-        data: chartVitals.map(l => l.systolic),
+        data: chartVitals.map(l => l.systolic ?? null),
+        spanGaps: true,
         borderColor: 'hsl(355, 78%, 56%)',
         backgroundColor: 'hsla(355, 78%, 56%, 0.1)',
         borderWidth: 3,
@@ -139,7 +141,8 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
       },
       {
         label: 'Diastolic',
-        data: chartVitals.map(l => l.diastolic),
+        data: chartVitals.map(l => l.diastolic ?? null),
+        spanGaps: true,
         borderColor: 'hsl(200, 85%, 55%)',
         backgroundColor: 'hsla(200, 85%, 55%, 0.05)',
         borderWidth: 3,
@@ -213,7 +216,7 @@ export const PatientHealthView: React.FC<PatientHealthViewProps> = ({
           </div>
           <div className="card-value-container">
             <div className="card-value" id="latest-bp">
-              {latestVital ? `${latestVital.systolic}/${latestVital.diastolic}` : '--/--'}
+              {latestVital && latestVital.systolic != null && latestVital.diastolic != null ? `${latestVital.systolic}/${latestVital.diastolic}` : '--/--'}
             </div>
             <span className="card-unit">mmHg</span>
           </div>

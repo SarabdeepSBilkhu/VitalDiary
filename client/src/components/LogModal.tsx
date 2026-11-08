@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Activity, Thermometer, Weight, FileText, Plus, Trash2, Lock } from 'lucide-react';
 
-const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'Urine Report', 'Other Reports'];
+const REPORT_TYPE_OPTIONS = ['CBC', 'LFT', 'RFT', 'Lipid Profile', 'Thyroid Profile', 'HbA1c', 'ABG', 'Urine Report', 'Other Reports'];
 
 interface ReportParameter {
   name: string;
@@ -73,6 +73,17 @@ const REPORT_TEMPLATES: Record<string, ReportParameter[]> = {
   'HbA1c': [
     { name: 'HbA1c', value: '', unit: '%' },
     { name: 'Estimated Average Glucose (eAG)', value: '', unit: 'mg/dL' },
+  ],
+  'ABG': [
+    { name: 'pH', value: '', unit: '' },
+    { name: 'PaCO2', value: '', unit: 'mmHg' },
+    { name: 'PaO2', value: '', unit: 'mmHg' },
+    { name: 'HCO3 (Bicarbonate)', value: '', unit: 'mEq/L' },
+    { name: 'Base Excess (BE)', value: '', unit: 'mEq/L' },
+    { name: 'SaO2', value: '', unit: '%' },
+    { name: 'Lactate', value: '', unit: 'mmol/L' },
+    { name: 'FiO2', value: '', unit: '%' },
+    { name: 'Anion Gap', value: '', unit: 'mEq/L' },
   ],
   'Urine Report': [
     { name: 'Culture', value: '', unit: '' },
@@ -252,20 +263,27 @@ export const LogModal: React.FC<LogModalProps> = ({
 
   const handleVitalsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!vitalDate || !systolic || !diastolic) {
-      showToast('Please fill out all required fields (Date & Time, Systolic, Diastolic).', 'warning');
+    if (!vitalDate) {
+      showToast('Please select Date & Time.', 'warning');
       return;
     }
 
-    const sysNum = parseInt(systolic);
-    const diaNum = parseInt(diastolic);
-    const hrNum = hr ? parseInt(hr) : null;
-    const spo2Num = spo2 ? parseInt(spo2) : null;
+    if ((systolic && !diastolic) || (!systolic && diastolic)) {
+      showToast('Please provide both Systolic and Diastolic values, or leave both blank.', 'warning');
+      return;
+    }
+
+    const sysNum = systolic ? parseInt(systolic, 10) : null;
+    const diaNum = diastolic ? parseInt(diastolic, 10) : null;
+    const hrNum = hr ? parseInt(hr, 10) : null;
+    const spo2Num = spo2 ? parseInt(spo2, 10) : null;
     const tempNum = temperature ? parseFloat(temperature) : null;
 
-    if (sysNum < 50 || sysNum > 250 || diaNum < 30 || diaNum > 180) {
-      showToast('Please enter blood pressure within physiological limits (Systolic: 50-250, Diastolic: 30-180).', 'warning');
-      return;
+    if (sysNum !== null && diaNum !== null) {
+      if (sysNum < 40 || sysNum > 300 || diaNum < 20 || diaNum > 200) {
+        showToast('Please enter blood pressure within physiological limits (Systolic: 40-300, Diastolic: 20-200).', 'warning');
+        return;
+      }
     }
     if (hrNum !== null && (hrNum < 30 || hrNum > 220)) {
       showToast('Please enter a valid heart rate (30-220 bpm).', 'warning');
@@ -479,7 +497,7 @@ export const LogModal: React.FC<LogModalProps> = ({
               </div>
               
               <div className="form-group">
-                <label htmlFor="modal-vital-systolic">Systolic (BP High) *</label>
+                <label htmlFor="modal-vital-systolic">Systolic (BP High)</label>
                 <div className="input-unit-wrapper">
                   <input 
                     type="number" 
@@ -490,14 +508,13 @@ export const LogModal: React.FC<LogModalProps> = ({
                     className="form-control"
                     value={systolic}
                     onChange={(e) => setSystolic(e.target.value)}
-                    required 
                   />
                   <span className="input-unit">mmHg</span>
                 </div>
               </div>
               
               <div className="form-group">
-                <label htmlFor="modal-vital-diastolic">Diastolic (BP Low) *</label>
+                <label htmlFor="modal-vital-diastolic">Diastolic (BP Low)</label>
                 <div className="input-unit-wrapper">
                   <input 
                     type="number" 
@@ -508,7 +525,6 @@ export const LogModal: React.FC<LogModalProps> = ({
                     className="form-control"
                     value={diastolic}
                     onChange={(e) => setDiastolic(e.target.value)}
-                    required 
                   />
                   <span className="input-unit">mmHg</span>
                 </div>

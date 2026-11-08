@@ -170,8 +170,8 @@ async function initDatabase(retries = 15, delay = 4000) {
           id TEXT PRIMARY KEY,
           user_id INTEGER NOT NULL,
           timestamp DATETIME NOT NULL,
-          systolic INTEGER NOT NULL,
-          diastolic INTEGER NOT NULL,
+          systolic INTEGER,
+          diastolic INTEGER,
           hr INTEGER,
           spo2 INTEGER,
           temperature REAL,
@@ -185,6 +185,8 @@ async function initDatabase(retries = 15, delay = 4000) {
       if (isPg) {
         try {
           await dbQuery.run(`ALTER TABLE vitals ALTER COLUMN hr DROP NOT NULL`);
+          await dbQuery.run(`ALTER TABLE vitals ALTER COLUMN systolic DROP NOT NULL`);
+          await dbQuery.run(`ALTER TABLE vitals ALTER COLUMN diastolic DROP NOT NULL`);
         } catch (err) {
           // Ignored if already nullable
         }
