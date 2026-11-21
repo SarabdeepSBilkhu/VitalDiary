@@ -243,6 +243,24 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
            WHERE id = ?`,
           [planId, payment.id, expiresAt, userId]
         );
+        console.info(`[Webhook] Activated Premium for user ${userId} until ${expiresAt}`);
+      }
+    } else if (event === 'refund.processed' || event === 'refund.created') {
+      const refund = payload.payload?.refund?.entity;
+      const payment = payload.payload?.payment?.entity;
+      const userId = refund?.notes?.userId || payment?.notes?.userId;
+
+      if (userId) {
+        await dbQuery.run(
+          `UPDATE users 
+           SET tier = 'free', 
+               subscription_status = 'cancelled',
+               subscription_plan = NULL,
+               subscription_current_period_end = CURRENT_TIMESTAMP
+           WHERE id = ?`,
+          [userId]
+        );
+        console.info(`[Webhook] Refund processed — downgraded user ${userId} to free tier.`);
       }
     } else if (event === 'subscription.cancelled' || event === 'payment.failed') {
       const entity = payload.payload?.subscription?.entity || payload.payload?.payment?.entity;
@@ -252,6 +270,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           `UPDATE users SET subscription_status = 'past_due' WHERE id = ?`,
           [userId]
         );
+        console.info(`[Webhook] Marked user ${userId} subscription as past_due.`);
       }
     }
 

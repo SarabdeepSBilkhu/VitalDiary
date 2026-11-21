@@ -19,6 +19,7 @@ import { AiAssistant } from './components/AiAssistant';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Toast } from './components/Toast';
 import { UpgradeModal } from './components/UpgradeModal';
+import { PolicyModal, type PolicyModalType } from './components/PolicyModal';
 import type { ToastType } from './components/Toast';
 
 export type HealthRecord = VitalsRecord | GlucoseRecord | WeightRecord | ReportRecord;
@@ -32,6 +33,7 @@ export const App: React.FC = () => {
   const [activeView, setActiveView] = useState<string>('dashboard-view');
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const [upgradeTrigger, setUpgradeTrigger] = useState<string>('');
+  const [policyModal, setPolicyModal] = useState<PolicyModalType>(null);
   const isPremium = user?.tier === 'premium';
 
   const handleOpenUpgrade = (featureName: string) => {
@@ -380,6 +382,7 @@ export const App: React.FC = () => {
             onNavigateToRegister={() => setAuthView('register')}
             showToast={showToast}
             clearToasts={clearToasts}
+            onOpenPolicy={setPolicyModal}
           />
         ) : (
           <Register 
@@ -387,6 +390,7 @@ export const App: React.FC = () => {
             onNavigateToLogin={() => setAuthView('login')}
             showToast={showToast}
             clearToasts={clearToasts}
+            onOpenPolicy={setPolicyModal}
           />
         )}
         
@@ -396,6 +400,9 @@ export const App: React.FC = () => {
             <Toast key={toast.id} toast={toast} onClose={removeToast} />
           ))}
         </div>
+
+        {/* Business & Legal Policies Modal */}
+        <PolicyModal type={policyModal} onClose={() => setPolicyModal(null)} />
       </div>
     );
   }
@@ -633,7 +640,10 @@ export const App: React.FC = () => {
           showToast('Welcome to VitalDiary Premium! All clinical features are unlocked.', 'success');
         }}
         featureTrigger={upgradeTrigger}
+        onOpenPolicy={setPolicyModal}
       />
+
+      <PolicyModal type={policyModal} onClose={() => setPolicyModal(null)} />
 
       <LogModal 
         isOpen={modalOpen}

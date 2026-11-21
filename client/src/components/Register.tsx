@@ -7,9 +7,10 @@ interface RegisterProps {
   onNavigateToLogin: () => void;
   showToast: (msg: string, type?: 'success' | 'danger' | 'warning' | 'info') => void;
   clearToasts?: () => void;
+  onOpenPolicy?: (type: 'privacy' | 'terms' | 'contact' | 'refund' | 'pricing') => void;
 }
 
-export const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigateToLogin, showToast, clearToasts }) => {
+export const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigateToLogin, showToast, clearToasts, onOpenPolicy }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -138,6 +139,23 @@ export const Register: React.FC<RegisterProps> = ({ onRegisterSuccess, onNavigat
               Sign In
             </button>
           </p>
+
+          <div className="auth-business-info mt-4 pt-3 border-top text-xs text-muted" style={{ lineHeight: '1.6' }}>
+            <p className="mb-2" style={{ color: 'var(--text-secondary)' }}>
+              <strong>VitalDiary</strong> — A secure personal health diary for tracking vitals, blood glucose, lab reports (CBC, ABG, LFT), medications, and clinical trends.
+            </p>
+            <div className="d-flex justify-center gap-3 flex-wrap" style={{ fontSize: '0.75rem' }}>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('pricing')}>Pricing</button>
+              <span>•</span>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('terms')}>Terms of Service</button>
+              <span>•</span>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('privacy')}>Privacy Policy</button>
+              <span>•</span>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('refund')}>Refund Policy</button>
+              <span>•</span>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('contact')}>Contact Us</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

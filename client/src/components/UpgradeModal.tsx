@@ -14,13 +14,15 @@ interface UpgradeModalProps {
   onClose: () => void;
   onSuccess?: () => void;
   featureTrigger?: string;
+  onOpenPolicy?: (type: 'privacy' | 'terms' | 'contact' | 'refund' | 'pricing') => void;
 }
 
 export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  featureTrigger
+  featureTrigger,
+  onOpenPolicy
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
   const [loading, setLoading] = useState(false);
@@ -305,6 +307,16 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             <div className="d-flex align-center justify-center gap-2 text-muted text-xs mt-2">
               <ShieldCheck size={14} />
               <span>Razorpay UPI AutoPay, NetBanking & Cards • Cancel anytime</span>
+            </div>
+
+            <div className="d-flex justify-center gap-2 text-xs text-muted mt-2 border-top pt-2">
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('terms')}>Terms</button>
+              <span>•</span>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('privacy')}>Privacy</button>
+              <span>•</span>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('refund')}>Refunds</button>
+              <span>•</span>
+              <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('contact')}>Contact</button>
             </div>
           </div>
         </div>
