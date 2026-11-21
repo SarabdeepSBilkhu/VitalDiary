@@ -2487,6 +2487,28 @@ select.form-control {
   box-shadow: 0 0 0 2px var(--color-primary);
 }
 
+.gateway-selector-card {
+  flex: 1;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface-elevated);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.gateway-selector-card:hover {
+  border-color: var(--color-primary);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.gateway-selector-card.selected {
+  border-color: var(--color-primary);
+  background-color: rgba(72, 199, 116, 0.12);
+  box-shadow: 0 0 0 1.5px var(--color-primary);
+}
+
 .plan-price-tag {
   font-size: 1.25rem;
   font-weight: 800;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Sparkles, Check, X, ShieldCheck, Zap, ArrowRight, Loader2 } from 'lucide-react';
+import { Sparkles, Check, X, ShieldCheck, Zap, ArrowRight, Loader2, CreditCard } from 'lucide-react';
 import { api, getCurrentUser, setCurrentUser } from '../utils/api';
 
 declare global {
@@ -135,7 +135,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
           theme: {
             color: '#48c774'
           },
-          // Explicitly prioritize and enable UPI payment methods (GPay, PhonePe, Paytm, QR)
+          // Custom payment method blocks: Only show UPI / QR and Cards & Other Methods
           config: {
             display: {
               blocks: {
@@ -156,7 +156,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               },
               sequence: ['block.upi', 'block.other'],
               preferences: {
-                show_default_blocks: true
+                show_default_blocks: false
               }
             }
           },
@@ -338,26 +338,49 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
           {/* Payment Gateway Selector */}
           <div className="mb-4">
-            <label className="text-xs font-semibold text-secondary mb-2 d-block">
-              Choose Payment Method
-            </label>
-            <div className="d-flex gap-2">
-              <button
-                type="button"
-                className={`btn btn-sm flex-1 d-flex align-center justify-center gap-2 ${gateway === 'razorpay' ? 'btn-primary' : 'btn-secondary'}`}
+            <div
+              className="text-xs font-semibold text-secondary"
+              style={{
+                display: 'block',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '14px'
+              }}
+            >
+              Select Payment Gateway
+            </div>
+            <div className="d-flex gap-3">
+              <div
+                className={`gateway-selector-card ${gateway === 'razorpay' ? 'selected' : ''}`}
                 onClick={() => setGateway('razorpay')}
-                style={{ padding: '0.65rem 0.5rem', fontWeight: 600 }}
               >
-                <span>Razorpay</span>
-              </button>
-              <button
-                type="button"
-                className={`btn btn-sm flex-1 d-flex align-center justify-center gap-2 ${gateway === 'payu' ? 'btn-primary' : 'btn-secondary'}`}
+                <div className="d-flex justify-between align-center mb-1">
+                  <div className="d-flex align-center gap-2">
+                    <CreditCard size={15} className={gateway === 'razorpay' ? 'color-primary' : 'text-muted'} />
+                    <span className="font-bold text-sm">Razorpay</span>
+                  </div>
+                  {gateway === 'razorpay' && <Check size={14} className="color-primary" />}
+                </div>
+                <p className="text-xs text-muted" style={{ margin: 0, fontSize: '0.72rem' }}>
+                  UPI, QR, Cards, NetBanking
+                </p>
+              </div>
+
+              <div
+                className={`gateway-selector-card ${gateway === 'payu' ? 'selected' : ''}`}
                 onClick={() => setGateway('payu')}
-                style={{ padding: '0.65rem 0.5rem', fontWeight: 600 }}
               >
-                <span>PayU</span>
-              </button>
+                <div className="d-flex justify-between align-center mb-1">
+                  <div className="d-flex align-center gap-2">
+                    <CreditCard size={15} className={gateway === 'payu' ? 'color-primary' : 'text-muted'} />
+                    <span className="font-bold text-sm">PayU</span>
+                  </div>
+                  {gateway === 'payu' && <Check size={14} className="color-primary" />}
+                </div>
+                <p className="text-xs text-muted" style={{ margin: 0, fontSize: '0.72rem' }}>
+                  India Gateway (Cards, UPI, Wallets)
+                </p>
+              </div>
             </div>
           </div>
 
