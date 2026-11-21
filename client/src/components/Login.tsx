@@ -113,7 +113,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess, onNavigateToRegist
             <p className="mb-2" style={{ color: 'var(--text-secondary)' }}>
               <strong>VitalDiary</strong> — A secure personal health diary for tracking vitals, blood glucose, lab reports (CBC, ABG, LFT), medications, and clinical trends.
             </p>
-            <div className="d-flex justify-center gap-3 flex-wrap" style={{ fontSize: '0.75rem' }}>
+            <div className="d-flex justify-center align-center gap-2 flex-wrap" style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
               <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('pricing')}>Pricing</button>
               <span>•</span>
               <button type="button" className="btn-text p-0 text-muted" onClick={() => onOpenPolicy?.('terms')}>Terms of Service</button>

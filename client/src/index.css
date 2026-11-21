@@ -1340,9 +1340,9 @@ select.form-control {
 
 .auth-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 540px;
   border-radius: var(--border-radius-lg);
-  padding: 2.25rem 2rem;
+  padding: 2.25rem 2.5rem;
 }
 
 .auth-header {
