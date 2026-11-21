@@ -117,6 +117,21 @@ export const App: React.FC = () => {
 
   // Fetch data on login or refresh trigger, and sync fresh user profile/tier from server
   useEffect(() => {
+    // Check if user was just redirected back from PayU checkout
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment_status');
+    const gateway = urlParams.get('gateway');
+    if (paymentStatus) {
+      if (paymentStatus === 'success') {
+        showToast(`Payment successful via ${gateway === 'payu' ? 'PayU' : 'Payment Gateway'}! Premium features unlocked.`, 'success');
+        setRefreshTrigger(p => p + 1);
+      } else {
+        showToast('Payment was cancelled or unsuccessful. Please try again.', 'warning');
+      }
+      // Clean query parameters from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     if (user) {
       // Sync fresh session details (tier, subscription_status) from DB
       api.getMe().then((freshUser) => {

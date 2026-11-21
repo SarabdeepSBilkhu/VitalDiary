@@ -19,13 +19,13 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://checkout.payu.in", "https://test.payu.in"],
       scriptSrcAttr: ["'none'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "blob:", "https://*"],
-      frameSrc: ["'self'", "https://api.razorpay.com", "https://checkout.razorpay.com"],
-      connectSrc: ["'self'", "https://api.razorpay.com", "https://lumberjack.razorpay.com", "https://*.railway.app", "https://*.upstash.io", "https://api.groq.com", "http://localhost:*", "ws://localhost:*"],
+      frameSrc: ["'self'", "https://api.razorpay.com", "https://checkout.razorpay.com", "https://secure.payu.in", "https://test.payu.in"],
+      connectSrc: ["'self'", "https://api.razorpay.com", "https://lumberjack.razorpay.com", "https://secure.payu.in", "https://test.payu.in", "https://*.railway.app", "https://*.upstash.io", "https://api.groq.com", "http://localhost:*", "ws://localhost:*"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
     }
@@ -52,6 +52,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// Support URL-encoded bodies for PayU POST returns and Webhooks
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 // Global Audit Log for write operations

@@ -25,6 +25,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
   onOpenPolicy
 }) => {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('monthly');
+  const [gateway, setGateway] = useState<'razorpay' | 'payu'>('razorpay');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Dynamically load Razorpay standard checkout script if not present
@@ -45,6 +46,58 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
     const currentUser = getCurrentUser();
 
+    // ── PayU Gateway Flow ───────────────────────────────────────────────────
+    if (gateway === 'payu') {
+      try {
+        const payuData = await api.createPayUPayment(selectedPlan);
+
+        // Dynamically create and submit a form directed to PayU Hosted Checkout
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = payuData.actionUrl;
+
+        const fields: Record<string, string> = {
+          key: payuData.key,
+          txnid: payuData.txnid,
+          amount: payuData.amount,
+          productinfo: payuData.productinfo,
+          firstname: payuData.firstname,
+          email: payuData.email,
+          phone: payuData.phone,
+          surl: payuData.surl,
+          furl: payuData.furl,
+          hash: payuData.hash,
+          udf1: payuData.udf1 || '',
+          udf2: payuData.udf2 || '',
+          udf3: payuData.udf3 || '',
+          udf4: payuData.udf4 || '',
+          udf5: payuData.udf5 || ''
+        };
+
+        for (const [k, v] of Object.entries(fields)) {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = k;
+          input.value = v;
+          form.appendChild(input);
+        }
+
+        document.body.appendChild(form);
+        form.submit();
+        return;
+      } catch (payuErr: any) {
+        if (payuErr?.message?.includes('PAYU_NOT_CONFIGURED')) {
+          setError('PayU keys are not yet configured on the server. Please select Razorpay or configure PAYU_MERCHANT_KEY.');
+          setLoading(false);
+          return;
+        }
+        setError(payuErr?.message || 'Failed to initiate PayU checkout.');
+        setLoading(false);
+        return;
+      }
+    }
+
+    // ── Razorpay Gateway Flow ───────────────────────────────────────────────
     try {
       // 1. Attempt official Razorpay Checkout Order
       let orderData: any = null;
@@ -283,6 +336,31 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             </div>
           )}
 
+          {/* Payment Gateway Selector */}
+          <div className="mb-4">
+            <label className="text-xs font-semibold text-secondary mb-2 d-block">
+              Choose Payment Method
+            </label>
+            <div className="d-flex gap-2">
+              <button
+                type="button"
+                className={`btn btn-sm flex-1 d-flex align-center justify-center gap-2 ${gateway === 'razorpay' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setGateway('razorpay')}
+                style={{ padding: '0.65rem 0.5rem', fontWeight: 600 }}
+              >
+                <span>Razorpay</span>
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm flex-1 d-flex align-center justify-center gap-2 ${gateway === 'payu' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setGateway('payu')}
+                style={{ padding: '0.65rem 0.5rem', fontWeight: 600 }}
+              >
+                <span>PayU</span>
+              </button>
+            </div>
+          </div>
+
           <div className="d-flex flex-column gap-2">
             <button 
               className="btn btn-primary w-100 d-flex align-center justify-center gap-2 py-3"
@@ -298,7 +376,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               ) : (
                 <>
                   <Sparkles size={18} />
-                  Upgrade via Razorpay ({selectedPlan === 'monthly' ? '₹199 / month' : '₹1,999 / year'})
+                  Upgrade via {gateway === 'razorpay' ? 'Razorpay' : 'PayU'} ({selectedPlan === 'monthly' ? '₹199 / month' : '₹1,999 / year'})
                   <ArrowRight size={16} />
                 </>
               )}
@@ -306,7 +384,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
 
             <div className="d-flex align-center justify-center gap-2 text-muted text-xs mt-2">
               <ShieldCheck size={14} />
-              <span>Razorpay UPI AutoPay, NetBanking & Cards • Cancel anytime</span>
+              <span>{gateway === 'razorpay' ? 'Razorpay UPI AutoPay, NetBanking & Cards' : 'PayU India 256-Bit SSL Checkout'} • Cancel anytime</span>
             </div>
 
             <div className="d-flex justify-center gap-2 text-xs text-muted mt-2 border-top pt-2">

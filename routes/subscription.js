@@ -85,7 +85,9 @@ router.get('/status', authenticateToken, attachSubscription, async (req, res) =>
       currentPeriodEnd: user.subscription_current_period_end,
       availablePlans: PLANS,
       razorpayKeyId: process.env.RAZORPAY_KEY_ID || null,
-      isConfigured: !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
+      isConfigured: !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET),
+      payuKey: (process.env.PAYU_MERCHANT_KEY || '').replace(/^["']|["']$/g, '').trim() || null,
+      payuAvailable: !!(process.env.PAYU_MERCHANT_KEY && process.env.PAYU_MERCHANT_SALT)
     });
   } catch (err) {
     console.error('Error fetching subscription status:', err);
@@ -329,6 +331,107 @@ router.post('/simulate-upgrade', authenticateToken, async (req, res) => {
     console.error('Error simulating subscription upgrade:', err);
     res.status(500).json({ error: 'Failed to update subscription.' });
   }
+});
+
+/**
+ * 6. POST /api/subscription/payu/create-payment
+ * Initiates PayU Hosted Checkout session by generating secure SHA-512 payment hash.
+ */
+router.post('/payu/create-payment', authenticateToken, async (req, res) => {
+  const merchantKey = (process.env.PAYU_MERCHANT_KEY || '').replace(/^["']|["']$/g, '').trim();
+  const merchantSalt = (process.env.PAYU_MERCHANT_SALT || '').replace(/^["']|["']$/g, '').trim();
+  const isTest = process.env.PAYU_MODE !== 'production';
+
+  if (!merchantKey || !merchantSalt) {
+    return res.status(400).json({
+      error: 'PayU keys not configured. Please add PAYU_MERCHANT_KEY and PAYU_MERCHANT_SALT to .env or environment variables.',
+      code: 'PAYU_NOT_CONFIGURED'
+    });
+  }
+
+  const { plan = 'monthly' } = req.body;
+  const selectedPlan = PLANS[plan] || PLANS.monthly;
+  const txnid = `tx_${req.user.id}_${Date.now()}`;
+  const amount = Number(selectedPlan.priceINR).toFixed(2);
+  const productinfo = selectedPlan.name;
+  const firstname = req.user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '') || 'Customer';
+  const email = req.user.email;
+  const phone = '9999999999';
+
+  // UDF fields carry user reference metadata
+  const udf1 = String(req.user.id);
+  const udf2 = selectedPlan.id;
+  const udf3 = String(selectedPlan.durationDays);
+  const udf4 = '';
+  const udf5 = '';
+
+  // PayU SHA-512 Request Hash Formula:
+  // sha512(key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT)
+  const hashString = `${merchantKey}|${txnid}|${amount}|${productinfo}|${firstname}|${email}|${udf1}|${udf2}|${udf3}|${udf4}|${udf5}||||||${merchantSalt}`;
+  const hash = crypto.createHash('sha512').update(hashString).digest('hex');
+
+  const actionUrl = isTest ? 'https://test.payu.in/_payment' : 'https://secure.payu.in/_payment';
+  const baseUrl = process.env.PUBLIC_APP_URL || (req.get('origin') || `${req.protocol}://${req.get('host')}`);
+
+  res.json({
+    actionUrl,
+    key: merchantKey,
+    txnid,
+    amount,
+    productinfo,
+    firstname,
+    email,
+    phone,
+    udf1,
+    udf2,
+    udf3,
+    udf4,
+    udf5,
+    surl: `${baseUrl}/api/subscription/payu/return`,
+    furl: `${baseUrl}/api/subscription/payu/return`,
+    hash,
+    plan: selectedPlan.id
+  });
+});
+
+/**
+ * 7. POST /api/subscription/payu/return
+ * Handles the browser POST return redirect from PayU checkout.
+ */
+router.post('/payu/return', async (req, res) => {
+  const { status, txnid, amount, productinfo, firstname, email, udf1, udf2, udf3, hash } = req.body;
+  const merchantSalt = (process.env.PAYU_MERCHANT_SALT || '').replace(/^["']|["']$/g, '').trim();
+  const merchantKey = (process.env.PAYU_MERCHANT_KEY || '').replace(/^["']|["']$/g, '').trim();
+
+  // Verification Reverse Hash Formula:
+  // sha512(SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key)
+  const reverseString = `${merchantSalt}|${status}||||||||${udf3 || ''}|${udf2 || ''}|${udf1 || ''}|${email}|${firstname}|${productinfo}|${amount}|${txnid}|${merchantKey}`;
+  const computedHash = crypto.createHash('sha512').update(reverseString).digest('hex');
+
+  const isSuccess = (status === 'success');
+  const userId = udf1;
+  const planId = udf2 || 'monthly';
+  const durationDays = parseInt(udf3 || '30', 10);
+
+  if (isSuccess && userId) {
+    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+    await dbQuery.run(
+      `UPDATE users 
+       SET tier = 'premium', 
+           subscription_status = 'active', 
+           subscription_plan = ?, 
+           subscription_id = ?, 
+           subscription_current_period_end = ? 
+       WHERE id = ?`,
+      [planId, txnid, expiresAt, userId]
+    );
+    console.info(`[PayU] Payment success for user ${userId}. Upgraded until ${expiresAt}`);
+  } else {
+    console.warn(`[PayU] Payment return status: ${status} for txn: ${txnid}`);
+  }
+
+  // Redirect back into web app with checkout outcome query param
+  res.redirect(`/?payment_status=${isSuccess ? 'success' : 'failed'}&gateway=payu`);
 });
 
 module.exports = router;

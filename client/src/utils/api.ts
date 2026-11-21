@@ -364,6 +364,10 @@ export const api = {
     return await request('/api/subscription/create-order', 'POST', { plan });
   },
 
+  async createPayUPayment(plan: 'monthly' | 'yearly') {
+    return await request('/api/subscription/payu/create-payment', 'POST', { plan });
+  },
+
   async verifyRazorpayPayment(payload: {
     razorpay_order_id: string;
     razorpay_payment_id: string;
