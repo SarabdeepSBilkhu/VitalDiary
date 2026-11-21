@@ -1350,7 +1350,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
               {exportPreset !== 'custom' && (
                 <div className="export-range-badge mt-2">
-                  <span className="text-xs text-muted">📅 {exportRangeLabel}</span>
+                  <span className="text-xs text-muted">{exportRangeLabel}</span>
                 </div>
               )}
             </div>

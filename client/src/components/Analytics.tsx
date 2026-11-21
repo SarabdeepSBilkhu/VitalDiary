@@ -902,13 +902,13 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
           <div className="filter-group">
             <label
                 htmlFor="analytics-metric-select"
-                style={{ display: 'block', marginBottom: '8px' }}
             >
                 Select Metric
             </label>
             <select
               id="analytics-metric-select"
               className="form-control"
+              style={{marginBottom: 16}}
               value={metric}
               onChange={(e) => {
                 const val = e.target.value;
@@ -935,7 +935,6 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
             <div className="filter-group">
               <label
                 htmlFor="analytics-timeframe-select"
-                style={{ display: 'block', marginBottom: '8px' }}
               >
                 Range
               </label>
@@ -943,13 +942,14 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
               <select
                 id="analytics-timeframe-select"
                 className="form-control"
+                style={{marginBottom: 16}}
                 value={timeframe}
                 onChange={(e) => setTimeframe(e.target.value as any)}
               >
                 <option value="7readings">Last 7 Readings</option>
                 <option value="30readings">Last 30 Readings</option>
                 <option value="all">All Readings</option>
-                <option value="custom">Custom Date Range</option>
+                <option value="custom">Custom Range</option>
               </select>
             </div>
           )}
@@ -957,7 +957,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
           {metric !== 'reports' && timeframe === 'custom' && (
             <div className="d-flex gap-3 align-center" style={{ flexWrap: 'wrap' }}>
               <div className="filter-group">
-                <label style={{ display: 'block', marginBottom: '8px' }}>
+                <label>
                   From
                 </label>
                 <input
@@ -969,7 +969,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ vitals, glucose, weights, 
                 />
               </div>
               <div className="filter-group">
-                <label style={{ display: 'block', marginBottom: '8px' }}>
+                <label>
                   To
                 </label>
                 <input
