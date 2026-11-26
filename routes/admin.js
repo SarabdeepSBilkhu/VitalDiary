@@ -39,6 +39,7 @@ router.get('/users', requireAdmin, async (req, res) => {
       SELECT u.id, u.email, u.role, u.created_at, p.name
       FROM users u
       LEFT JOIN profiles p ON u.id = p.user_id
+      WHERE u.role != 'admin'
       ORDER BY u.created_at DESC
     `);
 
@@ -146,7 +147,8 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
 // 8. Get summary stats for the admin dashboard
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
-    const [totalPatients, totalVitals, totalGlucose, totalReports, recentActivity] = await Promise.all([
+    const [totalPatients, totalVitals, totalGlucose, totalReports, recentActivity,
+           premiumUsers, subscriptionBreakdown] = await Promise.all([
       dbQuery.get(`SELECT COUNT(*) as count FROM users WHERE role = 'patient'`),
       dbQuery.get(`SELECT COUNT(*) as count FROM vitals`),
       dbQuery.get(`SELECT COUNT(*) as count FROM glucose`),
@@ -157,6 +159,13 @@ router.get('/stats', requireAdmin, async (req, res) => {
         LEFT JOIN users u ON al.user_id = u.id
         ORDER BY al.timestamp DESC
         LIMIT 20
+      `),
+      dbQuery.get(`SELECT COUNT(*) as count FROM users WHERE tier = 'premium' AND role != 'admin'`),
+      dbQuery.all(`
+        SELECT subscription_status, COUNT(*) as count
+        FROM users
+        WHERE role != 'admin' AND subscription_status IS NOT NULL AND subscription_status != 'inactive'
+        GROUP BY subscription_status
       `)
     ]);
 
@@ -165,12 +174,149 @@ router.get('/stats', requireAdmin, async (req, res) => {
       totalVitals: totalVitals?.count || 0,
       totalGlucose: totalGlucose?.count || 0,
       totalReports: totalReports?.count || 0,
-      recentActivity
+      recentActivity,
+      premiumUsers: premiumUsers?.count || 0,
+      subscriptionBreakdown: subscriptionBreakdown || []
     });
   } catch (err) {
     console.error('Error fetching admin stats:', err);
     res.status(500).json({ error: 'Server error retrieving stats.' });
   }
 });
+
+// ─────────────────────────────────────────────────────────
+//  SUBSCRIPTION MANAGEMENT ROUTES
+// ─────────────────────────────────────────────────────────
+
+/**
+ * 9. GET /api/admin/subscriptions
+ * Returns all users with their subscription status, plan, period end, and profile name.
+ * Sorted by most recently updated subscription first.
+ */
+router.get('/subscriptions', requireAdmin, async (req, res) => {
+  try {
+    const rows = await dbQuery.all(`
+      SELECT
+        u.id,
+        u.email,
+        u.role,
+        u.tier,
+        u.subscription_status,
+        u.subscription_plan,
+        u.subscription_id,
+        u.subscription_current_period_end,
+        u.created_at,
+        p.name
+      FROM users u
+      LEFT JOIN profiles p ON u.id = p.user_id
+      WHERE u.role != 'admin'
+      ORDER BY
+        CASE WHEN u.subscription_status IN ('active','refund_pending') THEN 0 ELSE 1 END,
+        u.subscription_current_period_end DESC NULLS LAST,
+        u.created_at DESC
+    `);
+
+    // Annotate with computed expiry status
+    const now = new Date();
+    const enriched = rows.map(r => ({
+      ...r,
+      isExpired: r.subscription_current_period_end
+        ? new Date(r.subscription_current_period_end) < now
+        : null
+    }));
+
+    res.json(enriched);
+  } catch (err) {
+    console.error('Error fetching subscription list:', err);
+    res.status(500).json({ error: 'Server error retrieving subscriptions.' });
+  }
+});
+
+/**
+ * 10. POST /api/admin/subscriptions/:userId/grant
+ * Manually grants Premium access for a specified number of days.
+ * Body: { days: number (default 30), plan: 'monthly'|'yearly' (default 'monthly'), reason: string }
+ */
+router.post('/subscriptions/:userId/grant', requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const { days = 30, plan = 'monthly', reason = 'Admin manual grant' } = req.body;
+
+  if (isNaN(parseInt(userId))) {
+    return res.status(400).json({ error: 'Invalid user ID.' });
+  }
+
+  try {
+    const user = await dbQuery.get('SELECT id, email FROM users WHERE id = ?', [userId]);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const expiresAt = new Date(Date.now() + parseInt(days) * 24 * 60 * 60 * 1000).toISOString();
+
+    await dbQuery.run(
+      `UPDATE users
+       SET tier = 'premium',
+           subscription_status = 'active',
+           subscription_plan = ?,
+           subscription_id = ?,
+           subscription_current_period_end = ?
+       WHERE id = ?`,
+      [plan, `admin_grant_${req.user.id}_${Date.now()}`, expiresAt, userId]
+    );
+
+    console.info(`[Admin] ${req.user.email} granted Premium to user ${user.email} for ${days} days. Reason: ${reason}`);
+
+    res.json({
+      success: true,
+      message: `Premium granted to ${user.email} until ${new Date(expiresAt).toLocaleDateString()}.`,
+      currentPeriodEnd: expiresAt
+    });
+  } catch (err) {
+    console.error('Error granting premium:', err);
+    res.status(500).json({ error: 'Server error granting premium access.' });
+  }
+});
+
+/**
+ * 11. POST /api/admin/subscriptions/:userId/revoke
+ * Immediately revokes Premium access and sets tier back to free.
+ * Body: { reason: string }
+ */
+router.post('/subscriptions/:userId/revoke', requireAdmin, async (req, res) => {
+  const { userId } = req.params;
+  const { reason = 'Admin manual revoke' } = req.body;
+
+  if (isNaN(parseInt(userId))) {
+    return res.status(400).json({ error: 'Invalid user ID.' });
+  }
+
+  try {
+    const user = await dbQuery.get('SELECT id, email FROM users WHERE id = ?', [userId]);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    await dbQuery.run(
+      `UPDATE users
+       SET tier = 'free',
+           subscription_status = 'cancelled',
+           subscription_plan = NULL,
+           subscription_current_period_end = datetime('now')
+       WHERE id = ?`,
+      [userId]
+    );
+
+    console.info(`[Admin] ${req.user.email} revoked Premium from user ${user.email}. Reason: ${reason}`);
+
+    res.json({
+      success: true,
+      message: `Premium access revoked for ${user.email}.`
+    });
+  } catch (err) {
+    console.error('Error revoking premium:', err);
+    res.status(500).json({ error: 'Server error revoking premium access.' });
+  }
+});
+
+/**
+ * 12. GET /api/admin/stats (augmented with subscription metrics)
+ * Also returns premium user count, revenue stats, and subscription breakdown.
+ */
 
 module.exports = router;

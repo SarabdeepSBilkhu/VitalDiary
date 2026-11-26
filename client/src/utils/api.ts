@@ -355,6 +355,19 @@ export const api = {
     return await request(`/api/admin/users/${userId}`, 'DELETE');
   },
 
+  // Admin subscription management
+  async getAdminSubscriptions() {
+    return await request('/api/admin/subscriptions', 'GET');
+  },
+
+  async adminGrantPremium(userId: string, days: number = 30, plan: 'monthly' | 'yearly' = 'monthly', reason?: string) {
+    return await request(`/api/admin/subscriptions/${userId}/grant`, 'POST', { days, plan, reason });
+  },
+
+  async adminRevokePremium(userId: string, reason?: string) {
+    return await request(`/api/admin/subscriptions/${userId}/revoke`, 'POST', { reason });
+  },
+
   // Subscription
   async getSubscriptionStatus(): Promise<SubscriptionStatus> {
     return await request('/api/subscription/status', 'GET');
@@ -369,8 +382,9 @@ export const api = {
   },
 
   async verifyRazorpayPayment(payload: {
-    razorpay_order_id: string;
     razorpay_payment_id: string;
+    razorpay_subscription_id?: string;
+    razorpay_order_id?: string;
     razorpay_signature: string;
     plan: 'monthly' | 'yearly';
   }) {

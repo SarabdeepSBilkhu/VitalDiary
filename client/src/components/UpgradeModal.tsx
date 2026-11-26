@@ -119,15 +119,14 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
         throw orderErr;
       }
 
-      // 2. If Order was created and Razorpay SDK is available, open checkout popup
+      // 2. If Subscription was created and Razorpay SDK is available, open checkout popup
       if (orderData && window.Razorpay) {
-        const options = {
+        const isSubscription = orderData.isSubscription && orderData.subscriptionId;
+
+        const options: any = {
           key: orderData.keyId,
-          amount: orderData.amount,
-          currency: orderData.currency || 'INR',
           name: 'VitalDiary',
           description: orderData.planName || 'VitalDiary Premium Subscription',
-          order_id: orderData.orderId,
           prefill: {
             email: currentUser?.email || '',
             contact: ''
@@ -162,14 +161,16 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
           },
           handler: async (response: {
             razorpay_payment_id: string;
-            razorpay_order_id: string;
+            razorpay_subscription_id?: string;
+            razorpay_order_id?: string;
             razorpay_signature: string;
           }) => {
             try {
               setLoading(true);
               await api.verifyRazorpayPayment({
-                razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_subscription_id: response.razorpay_subscription_id,
+                razorpay_order_id: response.razorpay_order_id,
                 razorpay_signature: response.razorpay_signature,
                 plan: selectedPlan
               });
@@ -187,6 +188,17 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
             }
           }
         };
+
+        if (isSubscription) {
+          // Subscription checkout: pass subscription_id (auto-debit mandate)
+          options.subscription_id = orderData.subscriptionId;
+          options.recurring = 1;
+        } else {
+          // Fallback: one-time order checkout
+          options.order_id = orderData.orderId;
+          options.amount = orderData.amount;
+          options.currency = orderData.currency || 'INR';
+        }
 
         const rzp = new window.Razorpay(options);
         rzp.open();

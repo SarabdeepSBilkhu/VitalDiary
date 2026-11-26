@@ -493,6 +493,17 @@ button {
   filter: brightness(1.05);
 }
 
+.btn-danger {
+  background-color: hsl(355, 78%, 52%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.2);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: hsl(355, 78%, 46%);
+  filter: brightness(1.05);
+}
+
 .btn-text {
   color: var(--color-primary);
   font-weight: 600;
