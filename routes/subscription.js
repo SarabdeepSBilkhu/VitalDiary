@@ -153,8 +153,8 @@ router.post('/create-order', authenticateToken, async (req, res) => {
     const razorpayPlanId = await ensureRazorpayPlan(plan);
 
     // Create a Razorpay Subscription with quantity=1, total_count drives auto-renewals
-    // total_count=12 for monthly (12 months), total_count=5 for yearly (5 years)
-    const totalCount = plan === 'yearly' ? 5 : 12;
+    // 6 years of AutoPay: total_count=72 for monthly (72 months), total_count=6 for yearly (6 years)
+    const totalCount = plan === 'yearly' ? 6 : 72;
 
     const subscription = await rzp.subscriptions.create({
       plan_id: razorpayPlanId,
