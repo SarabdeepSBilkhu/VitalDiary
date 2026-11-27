@@ -275,7 +275,9 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   }
 
   try {
-    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    const rawBody = req.rawBody
+      || (Buffer.isBuffer(req.body) ? req.body.toString('utf8')
+        : typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
     const expectedSignature = crypto
       .createHmac('sha256', webhookSecret)
       .update(rawBody)
@@ -290,15 +292,47 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     const event = payload.event;
     console.info(`Received Razorpay webhook event: ${event}`);
 
-    // ── Helper: resolve userId from notes or DB via subscription_id ────────
-    const resolveUserId = async (notes, subscriptionId) => {
+    // ── Helper: resolve userId from notes or DB via subscription_id / payment_id / Razorpay API ──
+    const resolveUserId = async (notes, subscriptionId, paymentId = null) => {
       if (notes?.userId) return String(notes.userId);
       if (subscriptionId) {
         const row = await dbQuery.get(
           `SELECT id FROM users WHERE subscription_id = ? LIMIT 1`,
           [subscriptionId]
         );
-        return row ? String(row.id) : null;
+        if (row) return String(row.id);
+      }
+      if (paymentId) {
+        const rowByPay = await dbQuery.get(
+          `SELECT id FROM users WHERE subscription_id = ? LIMIT 1`,
+          [paymentId]
+        );
+        if (rowByPay) return String(rowByPay.id);
+
+        // Fallback: fetch payment from Razorpay API to recover notes / subscription_id / email
+        try {
+          const rzp = getRazorpay();
+          if (rzp) {
+            const pmt = await rzp.payments.fetch(paymentId);
+            if (pmt?.notes?.userId) return String(pmt.notes.userId);
+            if (pmt?.subscription_id) {
+              const rowBySub = await dbQuery.get(
+                `SELECT id FROM users WHERE subscription_id = ? LIMIT 1`,
+                [pmt.subscription_id]
+              );
+              if (rowBySub) return String(rowBySub.id);
+            }
+            if (pmt?.email) {
+              const rowByEmail = await dbQuery.get(
+                `SELECT id FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1`,
+                [pmt.email]
+              );
+              if (rowByEmail) return String(rowByEmail.id);
+            }
+          }
+        } catch (fetchErr) {
+          console.warn(`[Webhook] Could not fetch payment ${paymentId} from Razorpay:`, fetchErr.message);
+        }
       }
       return null;
     };
@@ -370,7 +404,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     } else if (event === 'refund.created') {
       const refund = payload.payload?.refund?.entity;
       const payment = payload.payload?.payment?.entity;
-      const userId = await resolveUserId(refund?.notes || payment?.notes, null);
+      const userId = await resolveUserId(
+        refund?.notes || payment?.notes,
+        payment?.subscription_id,
+        refund?.payment_id || payment?.id
+      );
       if (userId) {
         // Mark as 'refund_pending' so the UI can show a banner, but keep premium access
         await dbQuery.run(
@@ -378,13 +416,19 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
           [userId]
         );
         console.info(`[Webhook] refund.created — marked user ${userId} as refund_pending (access retained until refund.processed)`);
+      } else {
+        console.warn('[Webhook] refund.created — could not resolve userId', refund?.id, refund?.payment_id);
       }
 
     // ── 5. refund.processed — refund settled; revoke premium access ─────────
     } else if (event === 'refund.processed') {
       const refund = payload.payload?.refund?.entity;
       const payment = payload.payload?.payment?.entity;
-      const userId = await resolveUserId(refund?.notes || payment?.notes, null);
+      const userId = await resolveUserId(
+        refund?.notes || payment?.notes,
+        payment?.subscription_id,
+        refund?.payment_id || payment?.id
+      );
       if (userId) {
         await dbQuery.run(
           `UPDATE users 
@@ -397,7 +441,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         );
         console.info(`[Webhook] refund.processed — downgraded user ${userId} to Free tier`);
       } else {
-        console.warn('[Webhook] refund.processed — could not resolve userId', refund?.notes);
+        console.warn('[Webhook] refund.processed — could not resolve userId', refund?.id, refund?.payment_id);
       }
 
     // ── 6. subscription.charged — recurring auto-debit succeeded ───────────

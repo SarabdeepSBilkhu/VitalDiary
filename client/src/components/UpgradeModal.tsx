@@ -134,7 +134,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
           theme: {
             color: '#48c774'
           },
-          // Custom payment method blocks: Only show UPI / QR and Cards & Other Methods
+          // Custom payment method blocks: UPI / QR, Cards & NetBanking, and Wallets
           config: {
             display: {
               blocks: {
@@ -145,15 +145,20 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                   ]
                 },
                 other: {
-                  name: 'Cards & Other Methods',
+                  name: 'Cards & NetBanking',
                   instruments: [
                     { method: 'card' },
-                    { method: 'netbanking' },
+                    { method: 'netbanking' }
+                  ]
+                },
+                wallet: {
+                  name: 'Wallets',
+                  instruments: [
                     { method: 'wallet' }
                   ]
                 }
               },
-              sequence: ['block.upi', 'block.other'],
+              sequence: ['block.upi', 'block.other', 'block.wallet'],
               preferences: {
                 show_default_blocks: false
               }
@@ -374,7 +379,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                   {gateway === 'razorpay' && <Check size={14} className="color-primary" />}
                 </div>
                 <p className="text-xs text-muted" style={{ margin: 0, fontSize: '0.72rem' }}>
-                  UPI, QR, Cards, NetBanking
+                  UPI, QR, Cards, NetBanking, Wallets
                 </p>
               </div>
 

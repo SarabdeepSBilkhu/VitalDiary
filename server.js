@@ -52,9 +52,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Support URL-encoded bodies for PayU POST returns and Webhooks
+// Support URL-encoded bodies for PayU POST returns and preserve rawBody for Razorpay webhooks
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 
 // Global Audit Log for write operations
 app.use(auditLog);

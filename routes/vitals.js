@@ -176,9 +176,10 @@ router.get('/trends', async (req, res) => {
       // Calculate averages for recent (up to 7) logs
       const recentLogs = logs.slice(0, 7);
       const validBP = recentLogs.filter(l => l.systolic != null && l.diastolic != null);
+      const validHR = recentLogs.filter(l => l.hr != null && l.hr > 0);
       const avgSys = validBP.length ? validBP.reduce((acc, log) => acc + log.systolic, 0) / validBP.length : null;
       const avgDia = validBP.length ? validBP.reduce((acc, log) => acc + log.diastolic, 0) / validBP.length : null;
-      const avgHr = recentLogs.reduce((acc, log) => acc + log.hr, 0) / recentLogs.length;
+      const avgHr = validHR.length ? validHR.reduce((acc, log) => acc + log.hr, 0) / validHR.length : null;
 
       // Basic threshold checks based on averages
       if (avgSys != null && avgDia != null && (avgSys >= 140 || avgDia >= 90)) {
@@ -189,9 +190,9 @@ router.get('/trends', async (req, res) => {
         alerts.push({ type: 'warning', message: 'Recent blood pressure averages are low (Hypotension).' });
       }
 
-      if (avgHr > 100) {
+      if (avgHr != null && avgHr > 100) {
         alerts.push({ type: 'warning', message: 'Recent resting heart rate averages are high (Tachycardia).' });
-      } else if (avgHr < 60) {
+      } else if (avgHr != null && avgHr < 60) {
         alerts.push({ type: 'warning', message: 'Recent resting heart rate averages are low (Bradycardia).' });
       }
 

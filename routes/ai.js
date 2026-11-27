@@ -130,16 +130,21 @@ async function fetchRelevantHealthData(userId, categories) {
     const alerts = [];
     if (data.recentVitals && data.recentVitals.length > 0) {
       const validBP = data.recentVitals.filter(l => l.systolic != null && l.diastolic != null);
+      const validHR = data.recentVitals.filter(l => l.hr != null && l.hr > 0);
       const avgSys = validBP.length ? validBP.reduce((acc, log) => acc + log.systolic, 0) / validBP.length : null;
       const avgDia = validBP.length ? validBP.reduce((acc, log) => acc + log.diastolic, 0) / validBP.length : null;
-      const avgHr  = data.recentVitals.reduce((acc, log) => acc + log.hr, 0) / data.recentVitals.length;
+      const avgHr  = validHR.length ? validHR.reduce((acc, log) => acc + log.hr, 0) / validHR.length : null;
 
-      if (avgSys >= 140 || avgDia >= 90) alerts.push('High blood pressure trend (Stage 2 Hypertension)');
-      else if (avgSys >= 130 || avgDia >= 80) alerts.push('Elevated blood pressure trend (Stage 1 Hypertension)');
-      else if (avgSys < 90 || avgDia < 60) alerts.push('Low blood pressure trend');
+      if (avgSys != null && avgDia != null) {
+        if (avgSys >= 140 || avgDia >= 90) alerts.push('High blood pressure trend (Stage 2 Hypertension)');
+        else if (avgSys >= 130 || avgDia >= 80) alerts.push('Elevated blood pressure trend (Stage 1 Hypertension)');
+        else if (avgSys < 90 || avgDia < 60) alerts.push('Low blood pressure trend');
+      }
 
-      if (avgHr > 100) alerts.push('High resting heart rate trend (Tachycardia)');
-      else if (avgHr < 60) alerts.push('Low resting heart rate trend (Bradycardia)');
+      if (avgHr != null) {
+        if (avgHr > 100) alerts.push('High resting heart rate trend (Tachycardia)');
+        else if (avgHr < 60) alerts.push('Low resting heart rate trend (Bradycardia)');
+      }
     }
     data.bpAlerts = alerts;
   }
